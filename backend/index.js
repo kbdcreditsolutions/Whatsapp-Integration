@@ -232,7 +232,11 @@ app.get('/health', (req, res) => {
   res.status(200).json({ status: 'OK', message: 'WhatsApp multi-provider proxy is running' });
 });
 
-// Start Server
-app.listen(PORT, () => {
-  console.log(`Server listening on port ${PORT}`);
-});
+// Start Server (Only if not in Vercel environment)
+if (process.env.VERCEL_ENV !== 'production' && process.env.NODE_ENV !== 'production') {
+  app.listen(PORT, () => {
+    console.log(`Server listening on port ${PORT}`);
+  });
+}
+
+module.exports = app;
