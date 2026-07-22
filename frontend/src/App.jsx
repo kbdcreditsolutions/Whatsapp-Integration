@@ -23,7 +23,7 @@ function App() {
 
           {/* Right Column: The Sending Widget */}
           <div className="sticky top-12">
-            <WhatsAppCampaignWidget backendUrl="http://localhost:3001" />
+            <WhatsAppCampaignWidget backendUrl={import.meta.env.DEV ? "http://localhost:3001" : ""} />
           </div>
         </div>
       </div>
