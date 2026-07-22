@@ -25,7 +25,7 @@ const WhatsAppCampaignWidget = ({ backendUrl = "http://localhost:3001" }) => {
         countryCode: countryCode,
         phoneNumber: phoneNumber,
         templateName: templateName,
-        languageCode: 'en',
+        languageCode: templateName === 'hello_world' ? 'en_US' : 'en',
         bodyValues: bodyValuesArray
       });
 
