@@ -104,7 +104,21 @@ app.post('/api/whatsapp/message', async (req, res) => {
       const phoneNumberId = isSandbox ? process.env.TEST_META_PHONE_NUMBER_ID : process.env.META_PHONE_NUMBER_ID;
 
       if (!phoneNumberId || !accessToken) {
-         throw new Error(`Meta credentials missing (Sandbox Mode: ${isSandbox})`);
+        if (isSandbox) {
+          console.log(`[SANDBOX MOCK] Missing Meta keys, but sandbox mode is ON. Simulating successful send to ${countryCode}${phoneNumber}...`);
+          return res.status(200).json({ 
+            success: true, 
+            data: {
+              messaging_product: "whatsapp",
+              contacts: [{ input: `${countryCode.replace('+', '')}${phoneNumber}`, wa_id: `${countryCode.replace('+', '')}${phoneNumber}` }],
+              messages: [{ id: `wamid.MOCK_${Date.now()}` }]
+            },
+            provider: 'meta',
+            mocked: true
+          });
+        } else {
+          throw new Error('Meta credentials missing. Please configure META_ACCESS_TOKEN and META_PHONE_NUMBER_ID.');
+        }
       }
 
       const metaHeaders = {
@@ -142,14 +156,14 @@ app.post('/api/whatsapp/message', async (req, res) => {
       return res.status(200).json({ success: true, data: response.data, provider: 'meta' });
       
     } else {
-      return res.status(400).json({ error: 'Invalid provider specified. Use "interakt" or "meta".' });
+      return res.status(400).json({ error: { message: 'Invalid provider specified. Use "interakt" or "meta".' } });
     }
 
   } catch (error) {
     console.error('Error sending message:', error.response?.data || error.message);
     res.status(error.response?.status || 500).json({
       success: false,
-      error: error.response?.data || 'Internal Server Error'
+      error: error.response?.data?.error || { message: error.message || 'Internal Server Error' }
     });
   }
 });
