@@ -110,7 +110,7 @@ export default function WhatsAppInbox({ backendUrl }) {
       });
       if (!res.ok) {
          const data = await res.json();
-         alert('Error sending reply: ' + (data.error?.message || data.error));
+         alert('Error sending reply: ' + (data.error?.message || JSON.stringify(data.error) || 'Unknown error'));
       } else {
          setReplyText('');
       }
