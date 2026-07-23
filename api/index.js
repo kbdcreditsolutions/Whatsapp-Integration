@@ -251,6 +251,12 @@ app.post('/api/webhooks/whatsapp', async (req, res) => {
         // Meta Inbound Message
         if (value.messages) {
           const message = value.messages[0];
+          const contacts = value.contacts;
+          let profileName = null;
+          if (contacts && contacts.length > 0 && contacts[0].profile) {
+            profileName = contacts[0].profile.name;
+          }
+
           console.log(`[META INBOUND] Received message from ${message.from}`);
           if (supabase) {
             let content = '';
@@ -258,14 +264,25 @@ app.post('/api/webhooks/whatsapp', async (req, res) => {
             else if (message.type === 'button') content = message.button.text;
             else content = `[${message.type}]`;
 
-            await supabase.from('messages').insert([{
+            const insertData = {
               phone_number: message.from,
               message_id: message.id,
               direction: 'inbound',
               type: message.type,
               content: content,
               status: 'received'
-            }]);
+            };
+
+            if (profileName) insertData.profile_name = profileName;
+
+            const { error } = await supabase.from('messages').insert([insertData]);
+            
+            // If insertion fails due to missing profile_name column (e.g. user hasn't run the SQL yet), retry without it.
+            if (error && profileName) {
+              console.warn("Insert failed, retrying without profile_name:", error.message);
+              delete insertData.profile_name;
+              await supabase.from('messages').insert([insertData]);
+            }
           }
         }
       }
@@ -316,6 +333,63 @@ app.get('/api/whatsapp/conversations', async (req, res) => {
 // Health Check Endpoint
 app.get('/health', (req, res) => {
   res.status(200).json({ status: 'OK', message: 'WhatsApp multi-provider proxy is running' });
+});
+
+/**
+ * Send Free-form text Reply (Outbound)
+ */
+app.post('/api/whatsapp/send', async (req, res) => {
+  try {
+    const { phoneNumber, message } = req.body;
+    if (!phoneNumber || !message) return res.status(400).json({ error: 'phoneNumber and message are required' });
+
+    const accessToken = process.env.META_ACCESS_TOKEN;
+    const phoneNumberId = process.env.META_PHONE_NUMBER_ID;
+
+    if (!phoneNumberId || !accessToken) {
+      return res.status(500).json({ error: 'Meta credentials missing' });
+    }
+
+    const payload = {
+      messaging_product: "whatsapp",
+      recipient_type: "individual",
+      to: phoneNumber,
+      type: "text",
+      text: {
+        preview_url: false,
+        body: message
+      }
+    };
+
+    const url = `https://graph.facebook.com/v19.0/${phoneNumberId}/messages`;
+    const response = await axios.post(url, payload, { headers: {
+      'Authorization': `Bearer ${accessToken}`,
+      'Content-Type': 'application/json'
+    }});
+
+    if (supabase && response.data.messages && response.data.messages.length > 0) {
+      const messageId = response.data.messages[0].id;
+      const insertData = {
+        phone_number: phoneNumber,
+        message_id: messageId,
+        direction: 'outbound',
+        type: 'text',
+        content: message,
+        status: 'sent'
+      };
+      
+      const { error } = await supabase.from('messages').insert([insertData]);
+      if (error) {
+         delete insertData.profile_name;
+         await supabase.from('messages').insert([insertData]); // fallback
+      }
+    }
+
+    return res.status(200).json({ success: true, data: response.data });
+  } catch (error) {
+    console.error('Error sending reply:', error.response?.data || error.message);
+    res.status(500).json({ error: error.response?.data || 'Internal Server Error' });
+  }
 });
 
 // Start Server (Only if not in Vercel environment)

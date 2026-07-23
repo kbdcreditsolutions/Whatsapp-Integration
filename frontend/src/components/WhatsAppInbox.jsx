@@ -12,6 +12,8 @@ export default function WhatsAppInbox({ backendUrl }) {
   const [conversations, setConversations] = useState({});
   const [activeNumber, setActiveNumber] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [replyText, setReplyText] = useState('');
+  const [sending, setSending] = useState(false);
 
   // Fetch initial conversations
   useEffect(() => {
@@ -85,6 +87,40 @@ export default function WhatsAppInbox({ backendUrl }) {
     return grouped;
   };
 
+  const getProfileName = (num) => {
+    const msgs = conversations[num] || [];
+    const inboundMsgs = msgs.filter(m => m.direction === 'inbound' && m.profile_name);
+    if (inboundMsgs.length > 0) {
+      return inboundMsgs[inboundMsgs.length - 1].profile_name;
+    }
+    return null;
+  };
+
+  const handleSendReply = async () => {
+    if (!replyText.trim() || !activeNumber) return;
+    setSending(true);
+    try {
+      const res = await fetch(`${backendUrl}/api/whatsapp/send`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          phoneNumber: activeNumber,
+          message: replyText.trim()
+        })
+      });
+      if (!res.ok) {
+         const data = await res.json();
+         alert('Error sending reply: ' + (data.error?.message || data.error));
+      } else {
+         setReplyText('');
+      }
+    } catch (e) {
+      alert('Error sending reply: ' + e.message);
+    } finally {
+      setSending(false);
+    }
+  };
+
   if (!supabase) {
     return (
       <div className="bg-white shadow rounded-lg p-6 text-center text-red-500">
@@ -109,18 +145,23 @@ export default function WhatsAppInbox({ backendUrl }) {
           ) : contacts.length === 0 ? (
             <p className="p-4 text-gray-500 text-sm">No conversations yet.</p>
           ) : (
-            contacts.map((num) => (
-              <div 
-                key={num}
-                onClick={() => setActiveNumber(num)}
-                className={`p-4 border-b border-gray-100 cursor-pointer hover:bg-gray-100 transition-colors ${activeNumber === num ? 'bg-blue-50 border-l-4 border-blue-500' : ''}`}
-              >
-                <div className="font-medium text-gray-800">+{num}</div>
-                <div className="text-xs text-gray-500 truncate mt-1">
-                  {conversations[num][conversations[num].length - 1]?.content || 'Image/Template'}
+            contacts.map((num) => {
+              const name = getProfileName(num);
+              return (
+                <div 
+                  key={num}
+                  onClick={() => setActiveNumber(num)}
+                  className={`p-4 border-b border-gray-100 cursor-pointer hover:bg-gray-100 transition-colors ${activeNumber === num ? 'bg-blue-50 border-l-4 border-blue-500' : ''}`}
+                >
+                  <div className="font-medium text-gray-800">
+                    {name || `+${num}`}
+                  </div>
+                  <div className="text-xs text-gray-500 truncate mt-1">
+                    {name ? `+${num}` : (conversations[num][conversations[num].length - 1]?.content || 'Image/Template')}
+                  </div>
                 </div>
-              </div>
-            ))
+              );
+            })
           )}
         </div>
       </div>
@@ -133,7 +174,7 @@ export default function WhatsAppInbox({ backendUrl }) {
               <div className="w-8 h-8 rounded-full bg-gray-300 flex items-center justify-center text-gray-600">
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>
               </div>
-              +{activeNumber}
+              {getProfileName(activeNumber) || `+${activeNumber}`}
             </div>
             
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
@@ -157,6 +198,27 @@ export default function WhatsAppInbox({ backendUrl }) {
                   </div>
                 );
               })}
+            </div>
+            
+            {/* Chat Input */}
+            <div className="p-4 bg-gray-100 border-t border-gray-200">
+              <form onSubmit={(e) => { e.preventDefault(); handleSendReply(); }} className="flex gap-2">
+                <input 
+                  type="text" 
+                  value={replyText}
+                  onChange={(e) => setReplyText(e.target.value)}
+                  placeholder="Type a message..." 
+                  className="flex-1 rounded-full border-gray-300 border px-4 py-2 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                  disabled={sending}
+                />
+                <button 
+                  type="submit"
+                  disabled={sending || !replyText.trim()}
+                  className="bg-blue-600 hover:bg-blue-700 text-white rounded-full px-6 py-2 font-medium disabled:opacity-50 transition-colors"
+                >
+                  {sending ? '...' : 'Send'}
+                </button>
+              </form>
             </div>
           </>
         ) : (
