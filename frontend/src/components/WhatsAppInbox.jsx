@@ -183,7 +183,15 @@ export default function WhatsAppInbox({ backendUrl }) {
                 return (
                   <div key={idx} className={`flex flex-col ${isInbound ? 'items-start' : 'items-end'}`}>
                     <div className={`max-w-[75%] rounded-lg p-3 shadow-sm ${isInbound ? 'bg-white rounded-tl-none' : 'bg-[#d9fdd3] rounded-tr-none'}`}>
-                      <p className="text-sm text-gray-800 whitespace-pre-wrap">{msg.content}</p>
+                      {msg.media_id ? (
+                        <img 
+                          src={`${backendUrl}/api/whatsapp/media/${msg.media_id}`} 
+                          alt="Media" 
+                          className="max-w-[200px] max-h-[200px] rounded object-contain mb-1" 
+                        />
+                      ) : (
+                        <p className="text-sm text-gray-800 whitespace-pre-wrap">{msg.content}</p>
+                      )}
                       <div className="flex justify-end items-center mt-1 gap-1">
                         <span className="text-[10px] text-gray-500">
                           {new Date(msg.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}

@@ -264,6 +264,13 @@ app.post('/api/webhooks/whatsapp', async (req, res) => {
             else if (message.type === 'button') content = message.button.text;
             else content = `[${message.type}]`;
 
+            let mediaId = null;
+            if (message.type === 'image' && message.image) mediaId = message.image.id;
+            else if (message.type === 'sticker' && message.sticker) mediaId = message.sticker.id;
+            else if (message.type === 'video' && message.video) mediaId = message.video.id;
+            else if (message.type === 'document' && message.document) mediaId = message.document.id;
+            else if (message.type === 'audio' && message.audio) mediaId = message.audio.id;
+
             const insertData = {
               phone_number: message.from,
               message_id: message.id,
@@ -274,13 +281,15 @@ app.post('/api/webhooks/whatsapp', async (req, res) => {
             };
 
             if (profileName) insertData.profile_name = profileName;
+            if (mediaId) insertData.media_id = mediaId;
 
             const { error } = await supabase.from('messages').insert([insertData]);
             
-            // If insertion fails due to missing profile_name column (e.g. user hasn't run the SQL yet), retry without it.
-            if (error && profileName) {
-              console.warn("Insert failed, retrying without profile_name:", error.message);
+            // If insertion fails due to missing columns, retry without them
+            if (error && (profileName || mediaId)) {
+              console.warn("Insert failed, retrying without extra columns:", error.message);
               delete insertData.profile_name;
+              delete insertData.media_id;
               await supabase.from('messages').insert([insertData]);
             }
           }
@@ -389,6 +398,36 @@ app.post('/api/whatsapp/send', async (req, res) => {
   } catch (error) {
     console.error('Error sending reply:', error.response?.data || error.message);
     res.status(500).json({ error: error.response?.data || 'Internal Server Error' });
+  }
+});
+
+/**
+ * Proxy Media from Meta (Stickers, Images)
+ */
+app.get('/api/whatsapp/media/:mediaId', async (req, res) => {
+  try {
+    const { mediaId } = req.params;
+    const accessToken = process.env.META_ACCESS_TOKEN;
+    if (!accessToken) return res.status(500).send('Missing Meta access token');
+
+    // 1. Get media URL from Meta
+    const urlResponse = await axios.get(`https://graph.facebook.com/v19.0/${mediaId}`, {
+      headers: { 'Authorization': `Bearer ${accessToken}` }
+    });
+    const mediaUrl = urlResponse.data.url;
+    const mimeType = urlResponse.data.mime_type;
+
+    // 2. Download and pipe directly to frontend
+    const mediaResponse = await axios.get(mediaUrl, {
+      headers: { 'Authorization': `Bearer ${accessToken}` },
+      responseType: 'stream'
+    });
+
+    res.setHeader('Content-Type', mimeType);
+    mediaResponse.data.pipe(res);
+  } catch (error) {
+    console.error('Error fetching media:', error.response?.data || error.message);
+    res.status(500).send('Error fetching media');
   }
 });
 
