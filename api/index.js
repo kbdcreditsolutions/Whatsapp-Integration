@@ -6,6 +6,16 @@ const axios = require('axios');
 const app = express();
 const PORT = process.env.PORT || 3001;
 
+const { createClient } = require('@supabase/supabase-js');
+
+// Supabase Configuration
+const supabaseUrl = process.env.VITE_SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+let supabase = null;
+if (supabaseUrl && supabaseKey) {
+  supabase = createClient(supabaseUrl, supabaseKey);
+}
+
 // Middleware
 app.use(cors());
 app.use(express.json());
@@ -153,6 +163,20 @@ app.post('/api/whatsapp/message', async (req, res) => {
 
       const url = `https://graph.facebook.com/v19.0/${phoneNumberId}/messages`;
       const response = await axios.post(url, payload, { headers: metaHeaders });
+      
+      // Save outbound message to Supabase
+      if (supabase && response.data.messages && response.data.messages.length > 0) {
+        const messageId = response.data.messages[0].id;
+        await supabase.from('messages').insert([{
+          phone_number: fullPhoneNumber,
+          message_id: messageId,
+          direction: 'outbound',
+          type: 'template',
+          content: `Template: ${templateName}`,
+          status: 'sent'
+        }]);
+      }
+
       return res.status(200).json({ success: true, data: response.data, provider: 'meta' });
       
     } else {
@@ -217,14 +241,32 @@ app.post('/api/webhooks/whatsapp', (req, res) => {
         if (value.statuses) {
           const status = value.statuses[0];
           console.log(`[META STATUS] Message ${status.id} to ${status.recipient_id} is now ${status.status}`);
-          // TODO: Update SaaS DB
+          if (supabase) {
+            await supabase.from('messages')
+              .update({ status: status.status })
+              .eq('message_id', status.id);
+          }
         }
         
         // Meta Inbound Message
         if (value.messages) {
           const message = value.messages[0];
           console.log(`[META INBOUND] Received message from ${message.from}`);
-          // TODO: Update SaaS DB
+          if (supabase) {
+            let content = '';
+            if (message.type === 'text') content = message.text.body;
+            else if (message.type === 'button') content = message.button.text;
+            else content = `[${message.type}]`;
+
+            await supabase.from('messages').insert([{
+              phone_number: message.from,
+              message_id: message.id,
+              direction: 'inbound',
+              type: message.type,
+              content: content,
+              status: 'received'
+            }]);
+          }
         }
       }
     } 
@@ -245,6 +287,28 @@ app.post('/api/webhooks/whatsapp', (req, res) => {
   } catch (error) {
     console.error('Error processing webhook:', error);
     res.status(500).send('Internal Server Error');
+  }
+});
+
+
+// --- ENDPOINTS FOR INBOX UI ---
+
+/**
+ * Get Conversations
+ */
+app.get('/api/whatsapp/conversations', async (req, res) => {
+  if (!supabase) return res.status(500).json({ error: 'Supabase not configured' });
+  try {
+    const { data, error } = await supabase
+      .from('messages')
+      .select('*')
+      .order('created_at', { ascending: true });
+    
+    if (error) throw error;
+    res.status(200).json(data);
+  } catch (error) {
+    console.error('Error fetching conversations:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
   }
 });
 

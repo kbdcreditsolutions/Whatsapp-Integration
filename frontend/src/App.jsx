@@ -1,6 +1,7 @@
 import React from 'react'
 import WhatsAppCampaignWidget from './components/WhatsAppCampaignWidget'
 import MetaSetupWizard from './components/MetaSetupWizard'
+import WhatsAppInbox from './components/WhatsAppInbox'
 
 function App() {
   return (
@@ -25,6 +26,12 @@ function App() {
           <div className="sticky top-12">
             <WhatsAppCampaignWidget backendUrl={import.meta.env.DEV ? "http://localhost:3001" : ""} />
           </div>
+        </div>
+        
+        {/* Full Width Row: WhatsApp Inbox */}
+        <div className="mt-12">
+          <h2 className="text-2xl font-bold text-gray-900 mb-6">Live WhatsApp Inbox</h2>
+          <WhatsAppInbox backendUrl={import.meta.env.DEV ? "http://localhost:3001" : ""} />
         </div>
       </div>
     </div>
