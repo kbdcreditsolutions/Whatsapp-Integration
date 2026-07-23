@@ -228,7 +228,7 @@ app.get('/api/webhooks/whatsapp', (req, res) => {
  * Unified Webhook Receiver (POST)
  * Receives delivery statuses and inbound messages from both Interakt and Meta.
  */
-app.post('/api/webhooks/whatsapp', (req, res) => {
+app.post('/api/webhooks/whatsapp', async (req, res) => {
   try {
     const payload = req.body;
 
