@@ -91,14 +91,14 @@ function App() {
         {activeTab === 'inbox' && (
           <div>
             <h2 className="text-2xl font-semibold text-gray-900 mb-6 tracking-tight">Live WhatsApp Inbox</h2>
-            <WhatsAppInbox backendUrl={import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000'} />
+            <WhatsAppInbox backendUrl={import.meta.env.VITE_BACKEND_URL || (import.meta.env.DEV ? 'http://localhost:3000' : '')} />
           </div>
         )}
         
         {activeTab === 'campaigns' && (
           <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8">
             <h2 className="text-2xl font-semibold text-gray-900 mb-6">Send Campaigns</h2>
-            <WhatsAppCampaignWidget backendUrl={import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000'} />
+            <WhatsAppCampaignWidget backendUrl={import.meta.env.VITE_BACKEND_URL || (import.meta.env.DEV ? 'http://localhost:3000' : '')} />
           </div>
         )}
 
