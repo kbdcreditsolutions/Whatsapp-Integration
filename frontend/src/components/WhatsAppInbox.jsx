@@ -346,12 +346,30 @@ export default function WhatsAppInbox({ backendUrl }) {
                           : 'bg-blue-600 text-white rounded-2xl rounded-br-sm'
                       }`}>
                         {msg.media_id ? (
-                          <img 
-                            src={`${backendUrl}/api/whatsapp/media/${msg.media_id}`} 
-                            alt="Media" 
-                            className="max-w-[240px] max-h-[240px] rounded-xl object-contain mb-2 mt-1" 
-                          />
-                        ) : (
+                          msg.type === 'document' ? (
+                            <a 
+                              href={`${backendUrl}/api/whatsapp/media/${msg.media_id}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex items-center gap-3 p-3 bg-black/5 rounded-xl mb-2 mt-1 hover:bg-black/10 transition-colors"
+                            >
+                              <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center text-red-500 shadow-sm">
+                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className={`text-sm font-medium truncate ${isInbound ? 'text-gray-900' : 'text-white'}`}>Document</p>
+                                <p className={`text-xs truncate ${isInbound ? 'text-gray-500' : 'text-blue-200'}`}>Click to open</p>
+                              </div>
+                            </a>
+                          ) : (
+                            <img 
+                              src={`${backendUrl}/api/whatsapp/media/${msg.media_id}`} 
+                              alt="Media" 
+                              className="max-w-[240px] max-h-[240px] rounded-xl object-contain mb-2 mt-1 bg-black/5" 
+                            />
+                          )
+                        ) : null}
+                        {msg.content && (
                           <p className="text-[15px] leading-relaxed whitespace-pre-wrap">{msg.content}</p>
                         )}
                         <div className={`flex justify-end items-center mt-1 gap-1.5 ${isInbound ? 'text-gray-500' : 'text-blue-200'}`}>
