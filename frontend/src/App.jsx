@@ -25,100 +25,59 @@ function App() {
 
   if (!isAuthenticated) {
     return (
-      <div className="min-h-screen bg-[#0b0f19] flex flex-col justify-center py-12 sm:px-6 lg:px-8 relative overflow-hidden">
-        
-        {/* Ambient background glow */}
-        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-blue-600/20 rounded-full blur-[120px] pointer-events-none"></div>
-        <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-purple-600/20 rounded-full blur-[120px] pointer-events-none"></div>
-
-        <div className="sm:mx-auto sm:w-full sm:max-w-md relative z-10">
-          <div className="flex justify-center mb-6">
-             <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-lg shadow-blue-500/30">
-                <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path></svg>
-             </div>
+      <div className="min-h-screen bg-[#f5f5f7] flex items-center justify-center font-sans">
+        <div className="bg-white rounded-2xl p-10 shadow-sm border border-gray-100 max-w-sm w-full mx-4 text-center transition-all">
+          <div className="w-16 h-16 bg-blue-50 text-blue-500 rounded-full flex items-center justify-center mx-auto mb-6">
+            <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8V7z"></path></svg>
           </div>
-          <h2 className="text-center text-3xl font-extrabold text-white tracking-tight">
-            Secure Dashboard
-          </h2>
-          <p className="mt-2 text-center text-sm text-gray-400">
-            Enter your team passcode to access the inbox
-          </p>
-        </div>
-
-        <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md relative z-10">
-          <div className="glass-card py-8 px-4 sm:rounded-2xl sm:px-10 border border-white/10">
-            <form className="space-y-6" onSubmit={handleLogin}>
-              <div>
-                <label htmlFor="passcode" className="block text-sm font-medium text-gray-300">
-                  Passcode
-                </label>
-                <div className="mt-2 relative">
-                  <input
-                    id="passcode"
-                    type="password"
-                    required
-                    value={passcode}
-                    onChange={(e) => setPasscode(e.target.value)}
-                    className="appearance-none block w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 sm:text-sm transition-all"
-                    placeholder="••••••••"
-                  />
-                </div>
-                {error && <p className="mt-2 text-sm text-red-400 font-medium">{error}</p>}
-              </div>
-
-              <div>
-                <button
-                  type="submit"
-                  className="w-full flex justify-center py-3 px-4 rounded-xl shadow-lg shadow-blue-600/20 text-sm font-medium text-white bg-blue-600 hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[#0b0f19] focus:ring-blue-500 transition-all duration-200 active:scale-[0.98]"
-                >
-                  Enter Dashboard
-                </button>
-              </div>
-            </form>
-          </div>
+          <h2 className="text-2xl font-semibold text-gray-900 mb-2 tracking-tight">Dashboard Login</h2>
+          <p className="text-gray-500 text-sm mb-8">Enter your passcode to continue</p>
+          
+          <form onSubmit={handleLogin} className="space-y-6">
+            <input 
+              type="password" 
+              value={passcode}
+              onChange={(e) => setPasscode(e.target.value)}
+              placeholder="Passcode" 
+              className="w-full bg-[#f5f5f7] border-0 rounded-xl px-4 py-3 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-shadow text-center text-lg tracking-widest"
+              autoFocus
+            />
+            {error && <p className="text-red-500 text-sm">{error}</p>}
+            <button 
+              type="submit"
+              className="w-full bg-blue-600 hover:bg-blue-500 text-white rounded-xl py-3 font-medium transition-colors"
+            >
+              Unlock
+            </button>
+          </form>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#0b0f19] text-gray-100 flex flex-col font-sans">
-      {/* Navbar */}
-      <nav className="bg-[#111827]/80 backdrop-blur-md border-b border-white/10 sticky top-0 z-50">
+    <div className="min-h-screen bg-[#f5f5f7] font-sans">
+      <nav className="bg-white/80 backdrop-blur-md border-b border-gray-200 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between h-16">
-            <div className="flex">
-              <div className="flex-shrink-0 flex items-center">
-                <span className="text-xl font-bold text-white">WhatsApp SaaS</span>
-              </div>
-              <div className="hidden sm:ml-6 sm:flex sm:space-x-8">
-                <button
+          <div className="flex h-16 items-center justify-between">
+            <div className="flex items-center gap-8">
+              <h1 className="text-xl font-semibold text-gray-900 tracking-tight">WhatsApp SaaS</h1>
+              <div className="flex gap-1">
+                <button 
                   onClick={() => setActiveTab('inbox')}
-                  className={`${
-                    activeTab === 'inbox'
-                      ? 'border-blue-500 text-white'
-                      : 'border-transparent text-gray-400 hover:text-gray-200 hover:border-gray-500'
-                  } inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium transition-colors`}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === 'inbox' ? 'bg-gray-100 text-gray-900' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-700'}`}
                 >
                   Inbox
                 </button>
-                <button
+                <button 
                   onClick={() => setActiveTab('campaigns')}
-                  className={`${
-                    activeTab === 'campaigns'
-                      ? 'border-blue-500 text-white'
-                      : 'border-transparent text-gray-400 hover:text-gray-200 hover:border-gray-500'
-                  } inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium transition-colors`}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === 'campaigns' ? 'bg-gray-100 text-gray-900' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-700'}`}
                 >
                   Campaigns
                 </button>
-                <button
+                <button 
                   onClick={() => setActiveTab('setup')}
-                  className={`${
-                    activeTab === 'setup'
-                      ? 'border-blue-500 text-white'
-                      : 'border-transparent text-gray-400 hover:text-gray-200 hover:border-gray-500'
-                  } inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium transition-colors`}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === 'setup' ? 'bg-gray-100 text-gray-900' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-700'}`}
                 >
                   Setup
                 </button>
@@ -128,25 +87,24 @@ function App() {
         </div>
       </nav>
 
-      {/* Main Content */}
-      <main className="flex-1 max-w-7xl w-full mx-auto py-8 px-4 sm:px-6 lg:px-8">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {activeTab === 'inbox' && (
-          <div className="fade-in">
-            <h2 className="text-2xl font-bold text-gray-900 mb-6">Live WhatsApp Inbox</h2>
-            <WhatsAppInbox backendUrl={import.meta.env.DEV ? "http://localhost:3001" : ""} />
+          <div>
+            <h2 className="text-2xl font-semibold text-gray-900 mb-6 tracking-tight">Live WhatsApp Inbox</h2>
+            <WhatsAppInbox backendUrl={import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000'} />
           </div>
         )}
         
         {activeTab === 'campaigns' && (
-          <div className="max-w-2xl mx-auto fade-in">
-            <h2 className="text-2xl font-bold text-gray-900 mb-6">Send Campaigns</h2>
-            <WhatsAppCampaignWidget backendUrl={import.meta.env.DEV ? "http://localhost:3001" : ""} />
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8">
+            <h2 className="text-2xl font-semibold text-gray-900 mb-6">Send Campaigns</h2>
+            <WhatsAppCampaignWidget backendUrl={import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000'} />
           </div>
         )}
 
         {activeTab === 'setup' && (
-          <div className="max-w-3xl mx-auto fade-in">
-            <h2 className="text-2xl font-bold text-gray-900 mb-6">Meta & Interakt Setup</h2>
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8">
+            <h2 className="text-2xl font-semibold text-gray-900 mb-6">Meta & Interakt Setup</h2>
             <MetaSetupWizard />
           </div>
         )}

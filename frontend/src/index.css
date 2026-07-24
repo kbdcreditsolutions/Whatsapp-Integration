@@ -9,7 +9,7 @@
     @apply bg-white/5 backdrop-blur-md border border-white/10;
   }
   .glass-card {
-    @apply bg-[#111827]/80 backdrop-blur-xl border border-white/5 shadow-xl;
+    @apply bg-white/80 backdrop-blur-xl border border-gray-200/50 shadow-sm;
   }
   
   .hide-scrollbar::-webkit-scrollbar {
@@ -27,7 +27,7 @@
     background: transparent;
   }
   .custom-scrollbar::-webkit-scrollbar-thumb {
-    @apply bg-white/10 rounded-full hover:bg-white/20;
+    @apply bg-gray-300 rounded-full hover:bg-gray-400;
   }
 }
 
