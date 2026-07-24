@@ -269,9 +269,6 @@ export default function WhatsAppInbox({ backendUrl }) {
                 </div>
                 <div>
                   <div className="text-white text-lg">{getProfileName(activeNumber) || `+${activeNumber}`}</div>
-                  <div className="text-xs text-green-400 flex items-center gap-1 mt-0.5">
-                    <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse"></span> Online
-                  </div>
                 </div>
               </div>
               <div className="flex items-center gap-3">
