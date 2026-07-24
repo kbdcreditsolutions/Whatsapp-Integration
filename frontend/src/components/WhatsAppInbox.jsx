@@ -19,6 +19,11 @@ export default function WhatsAppInbox({ backendUrl }) {
   const [selectedFile, setSelectedFile] = useState(null);
   const [filePreviewUrl, setFilePreviewUrl] = useState(null);
   const fileInputRef = useRef(null);
+  const messagesEndRef = useRef(null);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
 
   // Fetch initial conversations and contacts
   useEffect(() => {
@@ -230,6 +235,10 @@ export default function WhatsAppInbox({ backendUrl }) {
 
   const activeMessages = activeNumber ? conversations[activeNumber] : [];
 
+  useEffect(() => {
+    scrollToBottom();
+  }, [activeMessages]);
+
   return (
     <div className="bg-white rounded-2xl flex h-[700px] overflow-hidden border border-gray-200 shadow-sm relative z-10">
       {/* Left Pane - Contacts */}
@@ -412,6 +421,7 @@ export default function WhatsAppInbox({ backendUrl }) {
                   </div>
                 );
               })}
+              <div ref={messagesEndRef} />
             </div>
             
             {/* Chat Input */}
