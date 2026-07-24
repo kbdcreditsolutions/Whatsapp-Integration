@@ -2,6 +2,8 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const axios = require('axios');
+const multer = require('multer');
+const FormData = require('form-data');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -344,13 +346,19 @@ app.get('/health', (req, res) => {
   res.status(200).json({ status: 'OK', message: 'WhatsApp multi-provider proxy is running' });
 });
 
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 16 * 1024 * 1024 } }); // 16MB limit
+
 /**
- * Send Free-form text Reply (Outbound)
+ * Send Free-form text Reply (Outbound) or Media Message
  */
-app.post('/api/whatsapp/send', async (req, res) => {
+app.post('/api/whatsapp/send', upload.single('file'), async (req, res) => {
   try {
     const { phoneNumber, message } = req.body;
-    if (!phoneNumber || !message) return res.status(400).json({ error: 'phoneNumber and message are required' });
+    const file = req.file;
+    
+    if (!phoneNumber && !message && !file) {
+      return res.status(400).json({ error: 'phoneNumber and message or file are required' });
+    }
 
     const accessToken = process.env.META_ACCESS_TOKEN;
     const phoneNumberId = process.env.META_PHONE_NUMBER_ID;
@@ -359,16 +367,47 @@ app.post('/api/whatsapp/send', async (req, res) => {
       return res.status(500).json({ error: 'Meta credentials missing' });
     }
 
-    const payload = {
+    let mediaId = null;
+    let messageType = 'text';
+
+    // If there is a file, upload it to Meta first
+    if (file) {
+      const formData = new FormData();
+      formData.append('file', file.buffer, {
+        filename: file.originalname,
+        contentType: file.mimetype,
+      });
+      formData.append('messaging_product', 'whatsapp');
+
+      const mediaUrl = `https://graph.facebook.com/v19.0/${phoneNumberId}/media`;
+      const mediaResponse = await axios.post(mediaUrl, formData, {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          ...formData.getHeaders(),
+        }
+      });
+      
+      mediaId = mediaResponse.data.id;
+      messageType = file.mimetype.startsWith('image/') ? 'image' : 'document';
+    }
+
+    // Prepare payload
+    let payload = {
       messaging_product: "whatsapp",
       recipient_type: "individual",
       to: phoneNumber,
-      type: "text",
-      text: {
-        preview_url: false,
-        body: message
-      }
+      type: messageType,
     };
+
+    if (messageType === 'text') {
+      payload.text = { preview_url: false, body: message };
+    } else if (messageType === 'image') {
+      payload.image = { id: mediaId };
+      if (message) payload.image.caption = message; // Add caption if message exists
+    } else if (messageType === 'document') {
+      payload.document = { id: mediaId, filename: file.originalname };
+      if (message) payload.document.caption = message; // Some versions support caption for doc
+    }
 
     const url = `https://graph.facebook.com/v19.0/${phoneNumberId}/messages`;
     const response = await axios.post(url, payload, { headers: {
@@ -382,10 +421,11 @@ app.post('/api/whatsapp/send', async (req, res) => {
         phone_number: phoneNumber,
         message_id: messageId,
         direction: 'outbound',
-        type: 'text',
-        content: message,
-        status: 'sent'
+        type: messageType,
+        content: message || '',
+        status: 'sent',
       };
+      if (mediaId) insertData.media_id = mediaId;
       
       const { error } = await supabase.from('messages').insert([insertData]);
       if (error) {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
@@ -16,6 +16,9 @@ export default function WhatsAppInbox({ backendUrl }) {
   const [sending, setSending] = useState(false);
   const [contactsData, setContactsData] = useState({});
   const [activeTab, setActiveTab] = useState('All'); // 'All', 'Lead', 'Customer', 'Spam'
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [filePreviewUrl, setFilePreviewUrl] = useState(null);
+  const fileInputRef = useRef(null);
 
   // Fetch initial conversations and contacts
   useEffect(() => {
@@ -124,28 +127,59 @@ export default function WhatsAppInbox({ backendUrl }) {
   };
 
   const handleSendReply = async () => {
-    if (!replyText.trim() || !activeNumber) return;
+    if (!replyText.trim() && !selectedFile) return;
     setSending(true);
     try {
+      const formData = new FormData();
+      formData.append('phoneNumber', activeNumber);
+      if (replyText.trim()) formData.append('message', replyText);
+      if (selectedFile) formData.append('file', selectedFile);
+
       const res = await fetch(`${backendUrl}/api/whatsapp/send`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          phoneNumber: activeNumber,
-          message: replyText.trim()
-        })
+        body: formData
       });
-      if (!res.ok) {
-         const data = await res.json();
-         alert('Error sending reply: ' + (data.error?.message || JSON.stringify(data.error) || 'Unknown error'));
-      } else {
+      const data = await res.json();
+      if (data.success) {
          setReplyText('');
+         clearFile();
+      } else {
+         alert('Error sending reply: ' + (data.error?.message || 'Unknown error'));
       }
     } catch (e) {
       alert('Error sending reply: ' + e.message);
     } finally {
       setSending(false);
     }
+  };
+
+  const handlePaste = (e) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.indexOf('image') !== -1 || items[i].type === 'application/pdf') {
+        const file = items[i].getAsFile();
+        if (file) {
+          setSelectedFile(file);
+          setFilePreviewUrl(URL.createObjectURL(file));
+          e.preventDefault();
+        }
+      }
+    }
+  };
+
+  const handleFileChange = (e) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setSelectedFile(file);
+      setFilePreviewUrl(URL.createObjectURL(file));
+    }
+  };
+
+  const clearFile = () => {
+    setSelectedFile(null);
+    setFilePreviewUrl(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   const handleDeleteMessage = async (msgId) => {
@@ -350,22 +384,57 @@ export default function WhatsAppInbox({ backendUrl }) {
             </div>
             
             {/* Chat Input */}
-            <div className="p-5 bg-white z-10 border-t border-gray-100">
-              <form onSubmit={(e) => { e.preventDefault(); handleSendReply(); }} className="flex gap-3">
+            <div className="p-5 bg-white z-10 border-t border-gray-100 flex flex-col gap-3">
+              {filePreviewUrl && (
+                <div className="relative inline-block w-24 h-24 bg-gray-100 rounded-lg overflow-hidden border border-gray-200">
+                  <button 
+                    onClick={clearFile}
+                    className="absolute top-1 right-1 bg-black/50 hover:bg-black/70 text-white rounded-full p-1 z-10 transition-colors"
+                  >
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                  </button>
+                  {selectedFile?.type?.includes('pdf') || selectedFile?.type?.includes('document') ? (
+                     <div className="w-full h-full flex items-center justify-center bg-gray-50 text-gray-400 flex-col">
+                        <svg className="w-8 h-8 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
+                        <span className="text-[10px] truncate w-20 text-center px-1 font-medium">{selectedFile.name}</span>
+                     </div>
+                  ) : (
+                    <img src={filePreviewUrl} alt="Preview" className="w-full h-full object-cover" />
+                  )}
+                </div>
+              )}
+              
+              <form onSubmit={(e) => { e.preventDefault(); handleSendReply(); }} className="flex gap-3 items-end">
+                <input 
+                  type="file" 
+                  className="hidden" 
+                  ref={fileInputRef}
+                  onChange={handleFileChange}
+                  accept="image/*,application/pdf"
+                />
+                <button 
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="p-3.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-full transition-colors flex-shrink-0 mb-0.5"
+                  title="Attach File"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"></path></svg>
+                </button>
                 <div className="flex-1 relative">
                   <input 
                     type="text" 
                     value={replyText}
                     onChange={(e) => setReplyText(e.target.value)}
-                    placeholder="Type your message..." 
-                    className="w-full bg-gray-100 border border-transparent rounded-full pl-5 pr-12 py-3 text-gray-900 placeholder-gray-500 focus:outline-none focus:bg-white focus:border-gray-200 focus:ring-4 focus:ring-blue-500/10 transition-all"
+                    onPaste={handlePaste}
+                    placeholder={selectedFile ? "Add a caption..." : "Type your message or paste an image..."} 
+                    className="w-full bg-gray-100 border border-transparent rounded-full pl-5 pr-5 py-3 text-gray-900 placeholder-gray-500 focus:outline-none focus:bg-white focus:border-gray-200 focus:ring-4 focus:ring-blue-500/10 transition-all"
                     disabled={sending}
                   />
                 </div>
                 <button 
                   type="submit"
-                  disabled={sending || !replyText.trim()}
-                  className="bg-blue-600 hover:bg-blue-500 text-white rounded-full px-6 py-3 font-medium disabled:opacity-50 disabled:hover:bg-blue-600 transition-all flex items-center gap-2 shadow-sm active:scale-95"
+                  disabled={sending || (!replyText.trim() && !selectedFile)}
+                  className="bg-blue-600 hover:bg-blue-500 text-white rounded-full px-6 py-3 font-medium disabled:opacity-50 disabled:hover:bg-blue-600 transition-all flex items-center gap-2 shadow-sm active:scale-95 flex-shrink-0"
                 >
                   {sending ? (
                     <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
