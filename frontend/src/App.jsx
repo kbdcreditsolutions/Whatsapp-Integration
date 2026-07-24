@@ -25,40 +25,51 @@ function App() {
 
   if (!isAuthenticated) {
     return (
-      <div className="min-h-screen bg-gray-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
-        <div className="sm:mx-auto sm:w-full sm:max-w-md">
-          <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
+      <div className="min-h-screen bg-[#0b0f19] flex flex-col justify-center py-12 sm:px-6 lg:px-8 relative overflow-hidden">
+        
+        {/* Ambient background glow */}
+        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-blue-600/20 rounded-full blur-[120px] pointer-events-none"></div>
+        <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-purple-600/20 rounded-full blur-[120px] pointer-events-none"></div>
+
+        <div className="sm:mx-auto sm:w-full sm:max-w-md relative z-10">
+          <div className="flex justify-center mb-6">
+             <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-lg shadow-blue-500/30">
+                <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path></svg>
+             </div>
+          </div>
+          <h2 className="text-center text-3xl font-extrabold text-white tracking-tight">
             Secure Dashboard
           </h2>
-          <p className="mt-2 text-center text-sm text-gray-600">
-            Please enter your team passcode to access the inbox.
+          <p className="mt-2 text-center text-sm text-gray-400">
+            Enter your team passcode to access the inbox
           </p>
         </div>
 
-        <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
-          <div className="bg-white py-8 px-4 shadow sm:rounded-lg sm:px-10">
+        <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md relative z-10">
+          <div className="glass-card py-8 px-4 sm:rounded-2xl sm:px-10 border border-white/10">
             <form className="space-y-6" onSubmit={handleLogin}>
               <div>
-                <label htmlFor="passcode" className="block text-sm font-medium text-gray-700">
+                <label htmlFor="passcode" className="block text-sm font-medium text-gray-300">
                   Passcode
                 </label>
-                <div className="mt-1">
+                <div className="mt-2 relative">
                   <input
                     id="passcode"
                     type="password"
                     required
                     value={passcode}
                     onChange={(e) => setPasscode(e.target.value)}
-                    className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                    className="appearance-none block w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 sm:text-sm transition-all"
+                    placeholder="••••••••"
                   />
                 </div>
-                {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
+                {error && <p className="mt-2 text-sm text-red-400 font-medium">{error}</p>}
               </div>
 
               <div>
                 <button
                   type="submit"
-                  className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                  className="w-full flex justify-center py-3 px-4 rounded-xl shadow-lg shadow-blue-600/20 text-sm font-medium text-white bg-blue-600 hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[#0b0f19] focus:ring-blue-500 transition-all duration-200 active:scale-[0.98]"
                 >
                   Enter Dashboard
                 </button>
@@ -71,45 +82,45 @@ function App() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
+    <div className="min-h-screen bg-[#0b0f19] text-gray-100 flex flex-col font-sans">
       {/* Navbar */}
-      <nav className="bg-white shadow-sm border-b border-gray-200">
+      <nav className="bg-[#111827]/80 backdrop-blur-md border-b border-white/10 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16">
             <div className="flex">
               <div className="flex-shrink-0 flex items-center">
-                <span className="text-xl font-bold text-gray-900">WhatsApp SaaS</span>
+                <span className="text-xl font-bold text-white">WhatsApp SaaS</span>
               </div>
               <div className="hidden sm:ml-6 sm:flex sm:space-x-8">
                 <button
                   onClick={() => setActiveTab('inbox')}
                   className={`${
                     activeTab === 'inbox'
-                      ? 'border-blue-500 text-gray-900'
-                      : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
+                      ? 'border-blue-500 text-white'
+                      : 'border-transparent text-gray-400 hover:text-gray-200 hover:border-gray-500'
                   } inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium transition-colors`}
                 >
-                  Live Inbox
+                  Inbox
                 </button>
                 <button
                   onClick={() => setActiveTab('campaigns')}
                   className={`${
                     activeTab === 'campaigns'
-                      ? 'border-blue-500 text-gray-900'
-                      : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
+                      ? 'border-blue-500 text-white'
+                      : 'border-transparent text-gray-400 hover:text-gray-200 hover:border-gray-500'
                   } inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium transition-colors`}
                 >
-                  Send Campaigns
+                  Campaigns
                 </button>
                 <button
                   onClick={() => setActiveTab('setup')}
                   className={`${
                     activeTab === 'setup'
-                      ? 'border-blue-500 text-gray-900'
-                      : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
+                      ? 'border-blue-500 text-white'
+                      : 'border-transparent text-gray-400 hover:text-gray-200 hover:border-gray-500'
                   } inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium transition-colors`}
                 >
-                  API Setup
+                  Setup
                 </button>
               </div>
             </div>
