@@ -267,11 +267,22 @@ app.post('/api/webhooks/whatsapp', async (req, res) => {
             else content = `[${message.type}]`;
 
             let mediaId = null;
-            if (message.type === 'image' && message.image) mediaId = message.image.id;
-            else if (message.type === 'sticker' && message.sticker) mediaId = message.sticker.id;
-            else if (message.type === 'video' && message.video) mediaId = message.video.id;
-            else if (message.type === 'document' && message.document) mediaId = message.document.id;
-            else if (message.type === 'audio' && message.audio) mediaId = message.audio.id;
+            if (message.type === 'image' && message.image) {
+              mediaId = message.image.id;
+              content = message.image.caption || '';
+            } else if (message.type === 'sticker' && message.sticker) {
+              mediaId = message.sticker.id;
+            } else if (message.type === 'video' && message.video) {
+              mediaId = message.video.id;
+              content = message.video.caption || '';
+            } else if (message.type === 'document' && message.document) {
+              mediaId = message.document.id;
+              const docName = message.document.filename || 'Document';
+              const docCaption = message.document.caption || '';
+              content = `[FILENAME]${docName}[/FILENAME]${docCaption}`;
+            } else if (message.type === 'audio' && message.audio) {
+              mediaId = message.audio.id;
+            }
 
             const insertData = {
               phone_number: message.from,
@@ -417,12 +428,18 @@ app.post('/api/whatsapp/send', upload.single('file'), async (req, res) => {
 
     if (supabase && response.data.messages && response.data.messages.length > 0) {
       const messageId = response.data.messages[0].id;
+      
+      let finalContent = message || '';
+      if (messageType === 'document') {
+         finalContent = `[FILENAME]${file.originalname}[/FILENAME]${message || ''}`;
+      }
+
       const insertData = {
         phone_number: phoneNumber,
         message_id: messageId,
         direction: 'outbound',
         type: messageType,
-        content: message || '',
+        content: finalContent,
         status: 'sent',
       };
       if (mediaId) insertData.media_id = mediaId;

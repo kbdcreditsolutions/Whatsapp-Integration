@@ -331,6 +331,17 @@ export default function WhatsAppInbox({ backendUrl }) {
             <div className="flex-1 overflow-y-auto p-6 space-y-6 z-10 custom-scrollbar">
               {activeMessages.map((msg, idx) => {
                 const isInbound = msg.direction === 'inbound';
+                
+                let docFilename = 'Document';
+                let docCaption = msg.content;
+                if (msg.type === 'document' && msg.content && msg.content.startsWith('[FILENAME]')) {
+                  const match = msg.content.match(/^\[FILENAME\](.*?)\[\/FILENAME\]([\s\S]*)$/);
+                  if (match) {
+                    docFilename = match[1] || 'Document';
+                    docCaption = match[2]?.trim() || '';
+                  }
+                }
+
                 return (
                   <div key={idx} className={`flex flex-col ${isInbound ? 'items-start' : 'items-end'} group`}>
                     <div className="flex items-end gap-2 max-w-[75%]">
@@ -357,7 +368,7 @@ export default function WhatsAppInbox({ backendUrl }) {
                                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
                               </div>
                               <div className="flex-1 min-w-0">
-                                <p className={`text-sm font-medium truncate ${isInbound ? 'text-gray-900' : 'text-white'}`}>Document</p>
+                                <p className={`text-sm font-medium truncate ${isInbound ? 'text-gray-900' : 'text-white'}`}>{docFilename}</p>
                                 <p className={`text-xs truncate ${isInbound ? 'text-gray-500' : 'text-blue-200'}`}>Click to open</p>
                               </div>
                             </a>
@@ -369,8 +380,10 @@ export default function WhatsAppInbox({ backendUrl }) {
                             />
                           )
                         ) : null}
-                        {msg.content && (
-                          <p className="text-[15px] leading-relaxed whitespace-pre-wrap">{msg.content}</p>
+                        {msg.type === 'document' ? (
+                          docCaption && <p className="text-[15px] leading-relaxed whitespace-pre-wrap">{docCaption}</p>
+                        ) : (
+                          msg.content && <p className="text-[15px] leading-relaxed whitespace-pre-wrap">{msg.content}</p>
                         )}
                         <div className={`flex justify-end items-center mt-1 gap-1.5 ${isInbound ? 'text-gray-500' : 'text-blue-200'}`}>
                           <span className="text-[10px] font-medium tracking-wide">
