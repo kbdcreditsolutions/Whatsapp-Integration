@@ -1,6 +1,36 @@
-import React from 'react';
+import React, { useState } from 'react';
+import axios from 'axios';
 
-const MetaSetupWizard = () => {
+const MetaSetupWizard = ({ workspaceId }) => {
+  const [phoneId, setPhoneId] = useState('');
+  const [accessToken, setAccessToken] = useState('');
+  const [status, setStatus] = useState({ type: '', message: '' });
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = async (e) => {
+    e.preventDefault();
+    setSaving(true);
+    setStatus({ type: '', message: '' });
+
+    try {
+      const backendUrl = import.meta.env.VITE_BACKEND_URL || (import.meta.env.DEV ? 'http://localhost:3000' : '');
+      const res = await axios.post(`${backendUrl}/api/workspaces/update`, {
+        workspace_id: workspaceId,
+        meta_phone_number_id: phoneId,
+        meta_access_token: accessToken
+      });
+
+      if (res.data.success) {
+        setStatus({ type: 'success', message: 'Credentials saved successfully!' });
+      }
+    } catch (err) {
+      console.error(err);
+      setStatus({ type: 'error', message: 'Failed to save credentials.' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <div className="max-w-3xl mx-auto bg-white rounded-xl shadow-md overflow-hidden m-4 p-8 border border-gray-200">
       <div className="flex items-center space-x-3 mb-6">
@@ -79,6 +109,50 @@ const MetaSetupWizard = () => {
               </div>
             </div>
           </div>
+        </div>
+
+        {/* Form to Save Credentials */}
+        <div className="bg-gray-50 border border-gray-200 rounded-xl p-6 mt-8">
+          <h3 className="text-lg font-semibold text-gray-800 mb-4">Save Credentials to Workspace</h3>
+          {status.message && (
+            <div className={`mb-4 p-3 rounded text-sm ${status.type === 'success' ? 'bg-green-100 text-green-800 border border-green-200' : 'bg-red-100 text-red-800 border border-red-200'}`}>
+              {status.message}
+            </div>
+          )}
+          <form onSubmit={handleSave} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Phone Number ID</label>
+              <input 
+                type="text" 
+                value={phoneId} 
+                onChange={(e) => setPhoneId(e.target.value)} 
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                placeholder="e.g. 101234567891011"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Permanent Access Token</label>
+              <input 
+                type="password" 
+                value={accessToken} 
+                onChange={(e) => setAccessToken(e.target.value)} 
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                placeholder="EAAGm0..."
+                required
+              />
+            </div>
+            <button 
+              type="submit" 
+              disabled={saving || !workspaceId}
+              className={`w-full py-2 px-4 rounded-md text-white font-medium focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors ${saving ? 'bg-blue-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'}`}
+            >
+              {saving ? 'Saving...' : 'Save Credentials'}
+            </button>
+            {!workspaceId && (
+              <p className="text-xs text-red-500 mt-2 text-center">Cannot save: No workspace assigned to your account.</p>
+            )}
+          </form>
         </div>
       </div>
     </div>

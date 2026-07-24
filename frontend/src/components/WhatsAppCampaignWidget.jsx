@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import axios from 'axios';
 
-const WhatsAppCampaignWidget = ({ backendUrl = "http://localhost:3001" }) => {
+const WhatsAppCampaignWidget = ({ backendUrl = "http://localhost:3001", workspaceId }) => {
   const [provider, setProvider] = useState('interakt'); // Default provider
   const [isSandbox, setIsSandbox] = useState(true); // Sandbox toggle for Meta
   const [phoneNumber, setPhoneNumber] = useState('');
@@ -26,7 +26,8 @@ const WhatsAppCampaignWidget = ({ backendUrl = "http://localhost:3001" }) => {
         phoneNumber: phoneNumber,
         templateName: templateName,
         languageCode: templateName === 'hello_world' ? 'en_US' : 'en',
-        bodyValues: bodyValuesArray
+        bodyValues: bodyValuesArray,
+        workspace_id: workspaceId
       });
 
       if (response.data.success) {

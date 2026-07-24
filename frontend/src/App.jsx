@@ -1,29 +1,75 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
+import { Auth } from '@supabase/auth-ui-react'
+import { ThemeSupa } from '@supabase/auth-ui-shared'
+import { supabase } from './supabaseClient'
 import WhatsAppCampaignWidget from './components/WhatsAppCampaignWidget'
 import MetaSetupWizard from './components/MetaSetupWizard'
 import WhatsAppInbox from './components/WhatsAppInbox'
 
 function App() {
-  const [activeTab, setActiveTab] = useState('inbox'); // 'inbox', 'campaigns', 'setup'
-  
-  // Dashboard Security: Persist across refreshes
-  const [isAuthenticated, setIsAuthenticated] = useState(() => {
-    if (!import.meta.env.VITE_DASHBOARD_PASSCODE) return true;
-    return localStorage.getItem('whatsapp_saas_auth') === 'true';
-  });
-  const [passcode, setPasscode] = useState('');
-  const [error, setError] = useState('');
+  const [activeTab, setActiveTab] = useState('inbox');
+  const [session, setSession] = useState(null);
+  const [workspaceId, setWorkspaceId] = useState(null);
+  const [loadingWorkspace, setLoadingWorkspace] = useState(false);
 
-  const handleLogin = (e) => {
-    e.preventDefault();
-    if (passcode === import.meta.env.VITE_DASHBOARD_PASSCODE) {
-      setIsAuthenticated(true);
-      localStorage.setItem('whatsapp_saas_auth', 'true');
-      setError('');
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+    });
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    if (session?.user) {
+      setLoadingWorkspace(true);
+      // Fetch workspace ID from profile
+      supabase
+        .from('profiles')
+        .select('workspace_id')
+        .eq('id', session.user.id)
+        .single()
+        .then(({ data, error }) => {
+          if (data) {
+            setWorkspaceId(data.workspace_id);
+          } else if (error) {
+            console.error('Error fetching profile:', error.message);
+          }
+          setLoadingWorkspace(false);
+        });
     } else {
-      setError('Incorrect passcode');
+      setWorkspaceId(null);
     }
+  }, [session]);
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
   };
+
+  if (!session) {
+    return (
+      <div className="min-h-screen bg-[#f5f5f7] flex items-center justify-center p-4 font-sans">
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8 max-w-sm w-full">
+          <div className="text-center mb-8">
+            <h1 className="text-2xl font-semibold text-gray-900 tracking-tight">WhatsApp SaaS</h1>
+            <p className="text-sm text-gray-500 mt-2">Sign in to access your workspace</p>
+          </div>
+          <Auth 
+            supabaseClient={supabase} 
+            appearance={{ theme: ThemeSupa }}
+            providers={[]}
+            theme="light"
+          />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#f5f5f7] font-sans">
@@ -53,58 +99,55 @@ function App() {
                 </button>
               </div>
             </div>
+            <div className="flex items-center gap-4">
+              <span className="text-sm text-gray-500">{session.user.email}</span>
+              <button 
+                onClick={handleLogout}
+                className="text-sm font-medium text-red-600 hover:text-red-500 transition-colors"
+              >
+                Sign Out
+              </button>
+            </div>
           </div>
         </div>
       </nav>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {activeTab === 'inbox' && (
-          <div>
-            <h2 className="text-2xl font-semibold text-gray-900 mb-6 tracking-tight">Live WhatsApp Inbox</h2>
-            {!isAuthenticated ? (
-              <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-10 max-w-sm mx-auto text-center mt-12">
-                <div className="w-16 h-16 bg-blue-50 text-blue-500 rounded-full flex items-center justify-center mx-auto mb-6">
-                  <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8V7z"></path></svg>
-                </div>
-                <h3 className="text-xl font-semibold text-gray-900 mb-2">Inbox Locked</h3>
-                <p className="text-gray-500 text-sm mb-6">Enter your passcode to view live messages</p>
-                
-                <form onSubmit={handleLogin} className="space-y-4">
-                  <input 
-                    type="password" 
-                    value={passcode}
-                    onChange={(e) => setPasscode(e.target.value)}
-                    placeholder="Passcode" 
-                    className="w-full bg-[#f5f5f7] border-0 rounded-xl px-4 py-3 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-shadow text-center text-lg tracking-widest"
-                    autoFocus
-                  />
-                  {error && <p className="text-red-500 text-sm">{error}</p>}
-                  <button 
-                    type="submit"
-                    className="w-full bg-blue-600 hover:bg-blue-500 text-white rounded-xl py-3 font-medium transition-colors"
-                  >
-                    Unlock
-                  </button>
-                </form>
+        {loadingWorkspace ? (
+          <div className="text-center py-20">Loading workspace...</div>
+        ) : !workspaceId ? (
+          <div className="bg-yellow-50 text-yellow-800 p-4 rounded-xl border border-yellow-200">
+            <strong>No workspace assigned.</strong> Please contact an administrator to link your account to a workspace.
+          </div>
+        ) : (
+          <>
+            {activeTab === 'inbox' && (
+              <div>
+                <h2 className="text-2xl font-semibold text-gray-900 mb-6 tracking-tight">Live WhatsApp Inbox</h2>
+                <WhatsAppInbox 
+                  backendUrl={import.meta.env.VITE_BACKEND_URL || (import.meta.env.DEV ? 'http://localhost:3000' : '')} 
+                  workspaceId={workspaceId}
+                />
               </div>
-            ) : (
-              <WhatsAppInbox backendUrl={import.meta.env.VITE_BACKEND_URL || (import.meta.env.DEV ? 'http://localhost:3000' : '')} />
             )}
-          </div>
-        )}
-        
-        {activeTab === 'campaigns' && (
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8">
-            <h2 className="text-2xl font-semibold text-gray-900 mb-6">Send Campaigns</h2>
-            <WhatsAppCampaignWidget backendUrl={import.meta.env.VITE_BACKEND_URL || (import.meta.env.DEV ? 'http://localhost:3000' : '')} />
-          </div>
-        )}
+            
+            {activeTab === 'campaigns' && (
+              <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8">
+                <h2 className="text-2xl font-semibold text-gray-900 mb-6">Send Campaigns</h2>
+                <WhatsAppCampaignWidget 
+                  backendUrl={import.meta.env.VITE_BACKEND_URL || (import.meta.env.DEV ? 'http://localhost:3000' : '')} 
+                  workspaceId={workspaceId}
+                />
+              </div>
+            )}
 
-        {activeTab === 'setup' && (
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8">
-            <h2 className="text-2xl font-semibold text-gray-900 mb-6">Meta & Interakt Setup</h2>
-            <MetaSetupWizard />
-          </div>
+            {activeTab === 'setup' && (
+              <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8">
+                <h2 className="text-2xl font-semibold text-gray-900 mb-6">Meta & Interakt Setup</h2>
+                <MetaSetupWizard workspaceId={workspaceId} />
+              </div>
+            )}
+          </>
         )}
       </main>
     </div>

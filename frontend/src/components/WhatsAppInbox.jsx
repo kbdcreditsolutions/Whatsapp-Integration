@@ -8,7 +8,7 @@ if (supabaseUrl && supabaseAnonKey) {
   supabase = createClient(supabaseUrl, supabaseAnonKey);
 }
 
-export default function WhatsAppInbox({ backendUrl }) {
+export default function WhatsAppInbox({ backendUrl, workspaceId }) {
   const [conversations, setConversations] = useState({});
   const [activeNumber, setActiveNumber] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -36,6 +36,7 @@ export default function WhatsAppInbox({ backendUrl }) {
       const { data, error } = await supabase
         .from('messages')
         .select('*')
+        .eq('workspace_id', workspaceId)
         .order('created_at', { ascending: true });
       
       if (!error && data) {
@@ -46,7 +47,10 @@ export default function WhatsAppInbox({ backendUrl }) {
     };
 
     const fetchContacts = async () => {
-      const { data, error } = await supabase.from('contacts').select('*');
+      const { data, error } = await supabase
+        .from('contacts')
+        .select('*')
+        .eq('workspace_id', workspaceId);
       if (!error && data) {
         const contactMap = {};
         data.forEach(c => contactMap[c.phone_number] = c.category);
@@ -132,11 +136,12 @@ export default function WhatsAppInbox({ backendUrl }) {
   };
 
   const handleSendReply = async () => {
-    if (!replyText.trim() && !selectedFile) return;
+    if (!activeNumber || (!replyText.trim() && !selectedFile)) return;
     setSending(true);
     try {
       const formData = new FormData();
       formData.append('phoneNumber', activeNumber);
+      formData.append('workspace_id', workspaceId);
       if (replyText.trim()) formData.append('message', replyText);
       if (selectedFile) formData.append('file', selectedFile);
 
@@ -189,25 +194,24 @@ export default function WhatsAppInbox({ backendUrl }) {
 
   const handleDeleteMessage = async (msgId) => {
     if (!confirm('Are you sure you want to delete this message? This only deletes it from your dashboard.')) return;
-    await supabase.from('messages').delete().eq('id', msgId);
+    await supabase.from('messages').delete().eq('id', msgId).eq('workspace_id', workspaceId);
   };
 
   const handleDeleteChat = async () => {
     if (!activeNumber) return;
     if (!confirm('Are you sure you want to delete this entire conversation?')) return;
-    await supabase.from('messages').delete().eq('phone_number', activeNumber);
+    await supabase.from('messages').delete().eq('phone_number', activeNumber).eq('workspace_id', workspaceId);
     setActiveNumber(null);
   };
 
   const handleCategoryChange = async (newCategory) => {
     if (!activeNumber) return;
-    // Update local state immediately for snappy UI
     setContactsData(prev => ({ ...prev, [activeNumber]: newCategory }));
     
-    // Upsert into Supabase
     const { error } = await supabase.from('contacts').upsert({ 
       phone_number: activeNumber, 
-      category: newCategory 
+      category: newCategory,
+      workspace_id: workspaceId
     }, { onConflict: 'phone_number' });
     
     if (error) {
@@ -226,10 +230,9 @@ export default function WhatsAppInbox({ backendUrl }) {
 
   const allContacts = Object.keys(conversations);
   
-  // Filter contacts by active tab
   const contacts = allContacts.filter(num => {
     if (activeTab === 'All') return true;
-    const cat = contactsData[num] || 'Lead'; // Default to Lead
+    const cat = contactsData[num] || 'Lead';
     return cat === activeTab;
   });
 
@@ -241,7 +244,6 @@ export default function WhatsAppInbox({ backendUrl }) {
 
   return (
     <div className="bg-white rounded-2xl flex h-[700px] overflow-hidden border border-gray-200 shadow-sm relative z-10">
-      {/* Left Pane - Contacts */}
       <div className="w-1/3 border-r border-gray-200 flex flex-col bg-[#f9f9fa]">
         <div className="p-5 font-semibold border-b border-gray-200 bg-white/80 backdrop-blur-md z-10">
           <div className="flex gap-2 overflow-x-auto pb-3 mb-3 border-b border-gray-100 hide-scrollbar">
@@ -298,9 +300,7 @@ export default function WhatsAppInbox({ backendUrl }) {
         </div>
       </div>
 
-      {/* Right Pane - Chat */}
       <div className="w-2/3 flex flex-col bg-white relative">
-
         {activeNumber ? (
           <>
             <div className="p-4 font-semibold border-b border-gray-200 bg-white/90 backdrop-blur-md z-10 flex items-center justify-between">
@@ -368,7 +368,7 @@ export default function WhatsAppInbox({ backendUrl }) {
                         {msg.media_id ? (
                           msg.type === 'document' ? (
                             <a 
-                              href={`${backendUrl}/api/whatsapp/media/${msg.media_id}`}
+                              href={`${backendUrl}/api/whatsapp/media/${msg.media_id}?workspace_id=${workspaceId}`}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="flex items-center gap-3 p-3 bg-black/5 rounded-xl mb-2 mt-1 hover:bg-black/10 transition-colors"

@@ -112,8 +112,22 @@ app.post('/api/whatsapp/message', async (req, res) => {
       // Meta Cloud API Payload Construction
       // -------------------------------------
       const isSandbox = req.body.isSandbox === true;
-      const accessToken = isSandbox ? process.env.TEST_META_ACCESS_TOKEN : process.env.META_ACCESS_TOKEN;
-      const phoneNumberId = isSandbox ? process.env.TEST_META_PHONE_NUMBER_ID : process.env.META_PHONE_NUMBER_ID;
+      const { workspace_id } = req.body;
+      
+      let accessToken = null;
+      let phoneNumberId = null;
+
+      if (isSandbox) {
+        accessToken = process.env.TEST_META_ACCESS_TOKEN;
+        phoneNumberId = process.env.TEST_META_PHONE_NUMBER_ID;
+      } else {
+        if (!workspace_id) return res.status(400).json({ error: 'workspace_id is required for production Meta API' });
+        const { data: ws } = await supabase.from('workspaces').select('*').eq('id', workspace_id).single();
+        if (ws) {
+           accessToken = ws.meta_access_token;
+           phoneNumberId = ws.meta_phone_number_id;
+        }
+      }
 
       if (!phoneNumberId || !accessToken) {
         if (isSandbox) {
@@ -169,14 +183,17 @@ app.post('/api/whatsapp/message', async (req, res) => {
       // Save outbound message to Supabase
       if (supabase && response.data.messages && response.data.messages.length > 0) {
         const messageId = response.data.messages[0].id;
-        await supabase.from('messages').insert([{
+        const insertData = {
           phone_number: fullPhoneNumber,
           message_id: messageId,
           direction: 'outbound',
           type: 'template',
           content: `Template: ${templateName}`,
           status: 'sent'
-        }]);
+        };
+        if (workspace_id) insertData.workspace_id = workspace_id;
+        
+        await supabase.from('messages').insert([insertData]);
       }
 
       return res.status(200).json({ success: true, data: response.data, provider: 'meta' });
@@ -239,6 +256,17 @@ app.post('/api/webhooks/whatsapp', async (req, res) => {
       if (payload.entry && payload.entry[0].changes && payload.entry[0].changes[0].value) {
         const value = payload.entry[0].changes[0].value;
         
+        // Fetch workspace_id based on Meta Phone Number ID
+        let workspace_id = null;
+        if (supabase && value.metadata && value.metadata.phone_number_id) {
+          const { data: wsData } = await supabase
+            .from('workspaces')
+            .select('id')
+            .eq('meta_phone_number_id', value.metadata.phone_number_id)
+            .single();
+          if (wsData) workspace_id = wsData.id;
+        }
+
         // Meta Status Update
         if (value.statuses) {
           const status = value.statuses[0];
@@ -292,6 +320,8 @@ app.post('/api/webhooks/whatsapp', async (req, res) => {
               content: content,
               status: 'received'
             };
+            
+            if (workspace_id) insertData.workspace_id = workspace_id;
 
             if (profileName) insertData.profile_name = profileName;
             if (mediaId) insertData.media_id = mediaId;
@@ -337,10 +367,17 @@ app.post('/api/webhooks/whatsapp', async (req, res) => {
  */
 app.get('/api/whatsapp/conversations', async (req, res) => {
   if (!supabase) return res.status(500).json({ error: 'Supabase not configured' });
+  const { workspace_id } = req.query;
+  
+  if (!workspace_id) {
+    return res.status(400).json({ error: 'workspace_id is required' });
+  }
+
   try {
     const { data, error } = await supabase
       .from('messages')
       .select('*')
+      .eq('workspace_id', workspace_id)
       .order('created_at', { ascending: true });
     
     if (error) throw error;
@@ -351,6 +388,26 @@ app.get('/api/whatsapp/conversations', async (req, res) => {
   }
 });
 
+/**
+ * Update Workspace Meta Credentials
+ */
+app.post('/api/workspaces/update', async (req, res) => {
+  try {
+    const { workspace_id, meta_access_token, meta_phone_number_id } = req.body;
+    if (!workspace_id) return res.status(400).json({ error: 'workspace_id is required' });
+
+    const { error } = await supabase
+      .from('workspaces')
+      .update({ meta_access_token, meta_phone_number_id })
+      .eq('id', workspace_id);
+    
+    if (error) throw error;
+    res.status(200).json({ success: true });
+  } catch (error) {
+    console.error('Error updating workspace:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
 
 // Health Check Endpoint
 app.get('/health', (req, res) => {
@@ -364,18 +421,27 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 16 
  */
 app.post('/api/whatsapp/send', upload.single('file'), async (req, res) => {
   try {
-    const { phoneNumber, message } = req.body;
+    const { phoneNumber, message, workspace_id } = req.body;
     const file = req.file;
     
     if (!phoneNumber && !message && !file) {
       return res.status(400).json({ error: 'phoneNumber and message or file are required' });
     }
+    if (!workspace_id) {
+      return res.status(400).json({ error: 'workspace_id is required' });
+    }
 
-    const accessToken = process.env.META_ACCESS_TOKEN;
-    const phoneNumberId = process.env.META_PHONE_NUMBER_ID;
+    // Fetch dynamic tokens from DB
+    const { data: ws } = await supabase.from('workspaces').select('*').eq('id', workspace_id).single();
+    if (!ws) {
+      return res.status(404).json({ error: 'Workspace not found' });
+    }
+
+    const accessToken = ws.meta_access_token;
+    const phoneNumberId = ws.meta_phone_number_id;
 
     if (!phoneNumberId || !accessToken) {
-      return res.status(500).json({ error: 'Meta credentials missing' });
+      return res.status(500).json({ error: 'Meta credentials missing for this workspace' });
     }
 
     let mediaId = null;
@@ -435,6 +501,7 @@ app.post('/api/whatsapp/send', upload.single('file'), async (req, res) => {
       }
 
       const insertData = {
+        workspace_id: workspace_id,
         phone_number: phoneNumber,
         message_id: messageId,
         direction: 'outbound',
@@ -464,8 +531,13 @@ app.post('/api/whatsapp/send', upload.single('file'), async (req, res) => {
 app.get('/api/whatsapp/media/:mediaId', async (req, res) => {
   try {
     const { mediaId } = req.params;
-    const accessToken = process.env.META_ACCESS_TOKEN;
-    if (!accessToken) return res.status(500).send('Missing Meta access token');
+    const { workspace_id } = req.query;
+    
+    if (!workspace_id) return res.status(400).send('workspace_id is required');
+    
+    const { data: ws } = await supabase.from('workspaces').select('meta_access_token').eq('id', workspace_id).single();
+    if (!ws || !ws.meta_access_token) return res.status(500).send('Missing Meta access token for this workspace');
+    const accessToken = ws.meta_access_token;
 
     // 1. Get media URL from Meta
     const urlResponse = await axios.get(`https://graph.facebook.com/v19.0/${mediaId}`, {
