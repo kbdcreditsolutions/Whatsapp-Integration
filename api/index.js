@@ -337,6 +337,77 @@ app.post('/api/webhooks/whatsapp', async (req, res) => {
               delete insertData.media_id;
               await supabase.from('messages').insert([insertData]);
             }
+
+            // ==========================================
+            // AUTOMATION (AUTO-REPLY) LOGIC
+            // ==========================================
+            if (workspace_id && message.type === 'text') {
+              try {
+                // Fetch active automations for the workspace
+                const { data: automations } = await supabase
+                  .from('automations')
+                  .select('*')
+                  .eq('workspace_id', workspace_id)
+                  .eq('is_active', true);
+                
+                if (automations && automations.length > 0) {
+                  let matchedRule = null;
+
+                  // 1. Check Out of Office (OOO) first
+                  const oooRule = automations.find(a => a.trigger_type === 'out_of_office');
+                  if (oooRule) {
+                    matchedRule = oooRule; // For MVP, if active, it fires
+                  } else {
+                    // 2. Check Keyword triggers
+                    const keywordRules = automations.filter(a => a.trigger_type === 'keyword');
+                    const textBody = message.text.body.toLowerCase();
+                    for (const rule of keywordRules) {
+                      const keywords = rule.trigger_config?.keywords || [];
+                      if (keywords.some(kw => textBody.includes(kw.toLowerCase()))) {
+                        matchedRule = rule;
+                        break;
+                      }
+                    }
+                  }
+
+                  // If a rule matched, fire the auto-reply
+                  if (matchedRule && matchedRule.action_config?.message) {
+                    const { data: ws } = await supabase.from('workspaces').select('meta_access_token, meta_phone_number_id').eq('id', workspace_id).single();
+                    if (ws && ws.meta_access_token && ws.meta_phone_number_id) {
+                      const replyText = matchedRule.action_config.message;
+                      
+                      // Fire request to Meta
+                      const payload = {
+                        messaging_product: "whatsapp",
+                        recipient_type: "individual",
+                        to: message.from,
+                        type: "text",
+                        text: { body: replyText }
+                      };
+                      
+                      const url = `https://graph.facebook.com/v19.0/${ws.meta_phone_number_id}/messages`;
+                      const response = await axios.post(url, payload, { 
+                        headers: { 'Authorization': `Bearer ${ws.meta_access_token}` } 
+                      });
+
+                      // Save outbound message to DB
+                      await supabase.from('messages').insert([{
+                         workspace_id,
+                         phone_number: message.from,
+                         message_id: response.data.messages[0].id,
+                         direction: 'outbound',
+                         type: 'text',
+                         content: replyText,
+                         status: 'sent'
+                      }]);
+                      console.log(`[AUTOMATION] Fired auto-reply for rule: ${matchedRule.name}`);
+                    }
+                  }
+                }
+              } catch (autoErr) {
+                console.error('[AUTOMATION ERROR]', autoErr);
+              }
+            }
           }
         }
       }
@@ -903,6 +974,74 @@ app.get('/api/campaigns/:id/logs', async (req, res) => {
     const { data, error } = await supabase.from('campaign_logs').select('*').eq('campaign_id', id).eq('workspace_id', workspace_id).order('created_at', { ascending: false });
     if (error) throw error;
     res.status(200).json(data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// --- AUTOMATION ENDPOINTS ---
+
+/**
+ * Get Automations
+ */
+app.get('/api/automations', async (req, res) => {
+  if (!supabase) return res.status(500).json({ error: 'Supabase not configured' });
+  const { workspace_id } = req.query;
+  
+  try {
+    const { data, error } = await supabase.from('automations').select('*').eq('workspace_id', workspace_id).order('created_at', { ascending: false });
+    if (error) throw error;
+    res.status(200).json(data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * Create Automation
+ */
+app.post('/api/automations', async (req, res) => {
+  if (!supabase) return res.status(500).json({ error: 'Supabase not configured' });
+  const { workspace_id, name, trigger_type, trigger_config, action_config, is_active } = req.body;
+
+  try {
+    const { data, error } = await supabase.from('automations').insert([{
+      workspace_id, name, trigger_type, trigger_config, action_config, is_active
+    }]).select().single();
+    if (error) throw error;
+    res.status(200).json(data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * Update Automation
+ */
+app.put('/api/automations/:id', async (req, res) => {
+  if (!supabase) return res.status(500).json({ error: 'Supabase not configured' });
+  const { id } = req.params;
+  
+  try {
+    const { data, error } = await supabase.from('automations').update(req.body).eq('id', id).select().single();
+    if (error) throw error;
+    res.status(200).json(data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * Delete Automation
+ */
+app.delete('/api/automations/:id', async (req, res) => {
+  if (!supabase) return res.status(500).json({ error: 'Supabase not configured' });
+  const { id } = req.params;
+  
+  try {
+    const { error } = await supabase.from('automations').delete().eq('id', id);
+    if (error) throw error;
+    res.status(200).json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

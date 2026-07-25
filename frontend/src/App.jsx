@@ -6,6 +6,7 @@ import CampaignDashboard from './components/CampaignDashboard'
 import MetaSetupWizard from './components/MetaSetupWizard'
 import WhatsAppInbox from './components/WhatsAppInbox'
 import ContactManager from './components/ContactManager'
+import AutomationManager from './components/AutomationManager'
 
 function App() {
   const [activeTab, setActiveTab] = useState('inbox');
@@ -99,6 +100,12 @@ function App() {
                   Contacts
                 </button>
                 <button 
+                  onClick={() => setActiveTab('automation')}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === 'automation' ? 'bg-gray-100 text-gray-900' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-700'}`}
+                >
+                  Automation
+                </button>
+                <button 
                   onClick={() => setActiveTab('setup')}
                   className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === 'setup' ? 'bg-gray-100 text-gray-900' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-700'}`}
                 >
@@ -151,6 +158,12 @@ function App() {
                   backendUrl={import.meta.env.VITE_BACKEND_URL || (import.meta.env.DEV ? 'http://localhost:3000' : '')} 
                   workspaceId={workspaceId} 
                 />
+              </div>
+            )}
+
+            {activeTab === 'automation' && (
+              <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-2 md:p-8 h-[800px]">
+                <AutomationManager workspaceId={workspaceId} />
               </div>
             )}
 
