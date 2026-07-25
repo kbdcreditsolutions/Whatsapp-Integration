@@ -310,14 +310,25 @@ export default function WhatsAppInbox({ backendUrl, workspaceId, userId }) {
 
   const handleDeleteMessage = async (msgId) => {
     if (!confirm('Are you sure you want to delete this message? This only deletes it from your dashboard.')) return;
-    await supabase.from('messages').delete().eq('id', msgId).eq('workspace_id', workspaceId);
+    try {
+      const res = await fetch(`${backendUrl}/api/messages/${msgId}?workspace_id=${workspaceId}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Failed to delete message');
+      // Optimistically remove from UI or wait for realtime subscription to catch it
+    } catch (e) {
+      alert(e.message);
+    }
   };
 
   const handleDeleteChat = async () => {
     if (!activeNumber) return;
     if (!confirm('Are you sure you want to delete this entire conversation?')) return;
-    await supabase.from('messages').delete().eq('phone_number', activeNumber).eq('workspace_id', workspaceId);
-    setActiveNumber(null);
+    try {
+      const res = await fetch(`${backendUrl}/api/contacts/${activeNumber}/messages?workspace_id=${workspaceId}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Failed to delete conversation');
+      setActiveNumber(null);
+    } catch (e) {
+      alert(e.message);
+    }
   };
 
   const handleCategoryChange = async (newCategory) => {
@@ -327,15 +338,15 @@ export default function WhatsAppInbox({ backendUrl, workspaceId, userId }) {
       [activeNumber]: { ...prev[activeNumber], category: newCategory } 
     }));
     
-    const { error } = await supabase.from('contacts').upsert({ 
-      phone_number: activeNumber, 
-      category: newCategory,
-      workspace_id: workspaceId,
-      assigned_to: contactsData[activeNumber]?.assigned_to || null
-    }, { onConflict: 'phone_number' });
-    
-    if (error) {
-      alert('Error updating category.');
+    try {
+      const res = await fetch(`${backendUrl}/api/contacts/${activeNumber}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ workspace_id: workspaceId, category: newCategory })
+      });
+      if (!res.ok) throw new Error('Error updating category.');
+    } catch (error) {
+      alert(error.message);
     }
   };
 

@@ -600,6 +600,46 @@ app.get('/api/whatsapp/conversations', async (req, res) => {
 });
 
 /**
+ * Delete a specific message
+ */
+app.delete('/api/messages/:id', async (req, res) => {
+  if (!supabase) return res.status(500).json({ error: 'Supabase not configured' });
+  const { id } = req.params;
+  const { workspace_id } = req.query;
+  
+  if (!workspace_id) return res.status(400).json({ error: 'workspace_id is required' });
+
+  try {
+    const { error } = await supabase.from('messages').delete().eq('id', id).eq('workspace_id', workspace_id);
+    if (error) throw error;
+    res.status(200).json({ success: true });
+  } catch (error) {
+    console.error('Error deleting message:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+/**
+ * Delete an entire conversation (all messages for a contact)
+ */
+app.delete('/api/contacts/:phone/messages', async (req, res) => {
+  if (!supabase) return res.status(500).json({ error: 'Supabase not configured' });
+  const { phone } = req.params;
+  const { workspace_id } = req.query;
+  
+  if (!workspace_id) return res.status(400).json({ error: 'workspace_id is required' });
+
+  try {
+    const { error } = await supabase.from('messages').delete().eq('phone_number', phone).eq('workspace_id', workspace_id);
+    if (error) throw error;
+    res.status(200).json({ success: true });
+  } catch (error) {
+    console.error('Error deleting conversation:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+/**
  * Get Workspace Team Members
  */
 app.get('/api/workspaces/team', async (req, res) => {
@@ -662,6 +702,12 @@ app.post('/api/contacts/:phone/notes', async (req, res) => {
   }
 
   try {
+    // Ensure contact exists first to avoid foreign key constraints
+    await supabase.from('contacts').upsert(
+      { phone_number: phone, workspace_id },
+      { onConflict: 'phone_number', ignoreDuplicates: true }
+    );
+
     const { data, error } = await supabase
       .from('internal_notes')
       .insert([{
