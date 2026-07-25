@@ -1,0 +1,11 @@
+{
+  "name": "whatsapp-saas-root",
+  "private": true,
+  "workspaces": [
+    "frontend",
+    "api"
+  ],
+  "scripts": {
+    "build": "npm run build --workspace=frontend && rm -rf public && cp -R frontend/dist public"
+  }
+}
