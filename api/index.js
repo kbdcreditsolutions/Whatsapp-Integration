@@ -81,10 +81,15 @@ app.post('/api/interakt/track/users', async (req, res) => {
  */
 app.post('/api/whatsapp/message', async (req, res) => {
   try {
-    const { provider, countryCode, phoneNumber, templateName, languageCode, bodyValues, buttonValues } = req.body;
+    const { provider, countryCode, phoneNumber, templateName, languageCode, bodyValues, buttonValues, messageType, text, interactive, location } = req.body;
 
-    if (!countryCode || !phoneNumber || !templateName) {
-      return res.status(400).json({ error: 'countryCode, phoneNumber, and templateName are required' });
+    if (!countryCode || !phoneNumber) {
+      return res.status(400).json({ error: 'countryCode and phoneNumber are required' });
+    }
+    
+    const type = messageType || 'template';
+    if (type === 'template' && !templateName) {
+      return res.status(400).json({ error: 'templateName is required when type is template' });
     }
 
     const targetProvider = provider || 'interakt'; // Default to interakt for backwards compatibility
@@ -154,20 +159,22 @@ app.post('/api/whatsapp/message', async (req, res) => {
         'Content-Type': 'application/json'
       };
 
-      // Convert bodyValues ["John", "Order #123"] to Meta format [{type: "text", text: "John"}, ...]
-      const parameters = (bodyValues || []).map(val => ({
-        type: 'text',
-        text: val
-      }));
-
       const fullPhoneNumber = `${countryCode.replace('+', '')}${phoneNumber}`;
-      
-      const payload = {
+
+      let payload = {
         messaging_product: "whatsapp",
         recipient_type: "individual",
         to: fullPhoneNumber,
-        type: "template",
-        template: {
+        type: type,
+      };
+
+      if (type === 'template') {
+        // Convert bodyValues ["John", "Order #123"] to Meta format [{type: "text", text: "John"}, ...]
+        const parameters = (bodyValues || []).map(val => ({
+          type: 'text',
+          text: val
+        }));
+        payload.template = {
           name: templateName,
           language: { code: languageCode || 'en' },
           components: parameters.length > 0 ? [
@@ -176,8 +183,14 @@ app.post('/api/whatsapp/message', async (req, res) => {
               parameters: parameters
             }
           ] : []
-        }
-      };
+        };
+      } else if (type === 'text') {
+        payload.text = { body: text };
+      } else if (type === 'interactive') {
+        payload.interactive = interactive;
+      } else if (type === 'location') {
+        payload.location = location;
+      }
 
       const url = `https://graph.facebook.com/v19.0/${phoneNumberId}/messages`;
       const response = await axios.post(url, payload, { headers: metaHeaders });
@@ -189,8 +202,8 @@ app.post('/api/whatsapp/message', async (req, res) => {
           phone_number: fullPhoneNumber,
           message_id: messageId,
           direction: 'outbound',
-          type: 'template',
-          content: `Template: ${templateName}`,
+          type: type,
+          content: type === 'template' ? `Template: ${templateName}` : (type === 'text' ? text : (type === 'interactive' ? '[Interactive Message]' : '[Location]')),
           status: 'sent'
         };
         if (workspace_id) insertData.workspace_id = workspace_id;
@@ -249,6 +262,12 @@ app.get('/api/webhooks/whatsapp', (req, res) => {
  * Unified Webhook Receiver (POST)
  * Receives delivery statuses and inbound messages from both Interakt and Meta.
  */
+const multer = require('multer');
+const FormData = require('form-data');
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
+
 app.post('/api/webhooks/whatsapp', async (req, res) => {
   try {
     const payload = req.body;
@@ -297,21 +316,72 @@ app.post('/api/webhooks/whatsapp', async (req, res) => {
             else content = `[${message.type}]`;
 
             let mediaId = null;
+            let mediaMime = null;
             if (message.type === 'image' && message.image) {
               mediaId = message.image.id;
+              mediaMime = message.image.mime_type;
               content = message.image.caption || '';
             } else if (message.type === 'sticker' && message.sticker) {
               mediaId = message.sticker.id;
+              mediaMime = message.sticker.mime_type;
             } else if (message.type === 'video' && message.video) {
               mediaId = message.video.id;
+              mediaMime = message.video.mime_type;
               content = message.video.caption || '';
             } else if (message.type === 'document' && message.document) {
               mediaId = message.document.id;
+              mediaMime = message.document.mime_type;
               const docName = message.document.filename || 'Document';
               const docCaption = message.document.caption || '';
               content = `[FILENAME]${docName}[/FILENAME]${docCaption}`;
             } else if (message.type === 'audio' && message.audio) {
               mediaId = message.audio.id;
+              mediaMime = message.audio.mime_type;
+            } else if (message.type === 'interactive' && message.interactive) {
+              if (message.interactive.type === 'button_reply') {
+                content = `[BUTTON] ${message.interactive.button_reply.title}`;
+              } else if (message.interactive.type === 'list_reply') {
+                content = `[LIST] ${message.interactive.list_reply.title}`;
+              }
+            } else if (message.type === 'location' && message.location) {
+              content = `[LOCATION] ${message.location.latitude},${message.location.longitude} - ${message.location.name || ''}`;
+            }
+
+            // Attempt to download and store media in Supabase Storage
+            let storageUrl = null;
+            if (mediaId && workspace_id && supabase) {
+              try {
+                // We need the workspace's Meta access token
+                const { data: ws } = await supabase.from('workspaces').select('meta_access_token').eq('id', workspace_id).single();
+                if (ws && ws.meta_access_token) {
+                  // Get media URL from Meta
+                  const urlResponse = await axios.get(`https://graph.facebook.com/v19.0/${mediaId}`, {
+                    headers: { 'Authorization': `Bearer ${ws.meta_access_token}` }
+                  });
+                  
+                  // Download media as buffer
+                  const mediaResponse = await axios.get(urlResponse.data.url, {
+                    headers: { 'Authorization': `Bearer ${ws.meta_access_token}` },
+                    responseType: 'arraybuffer'
+                  });
+                  
+                  const ext = mediaMime ? mediaMime.split('/')[1].split(';')[0] : 'bin';
+                  const fileName = `${workspace_id}/${message.id}_${mediaId}.${ext}`;
+                  
+                  // Upload to Supabase
+                  const { error: uploadError } = await supabase.storage.from('whatsapp_media').upload(fileName, mediaResponse.data, {
+                    contentType: mediaMime,
+                    upsert: true
+                  });
+                  
+                  if (!uploadError) {
+                    const { data: publicUrlData } = supabase.storage.from('whatsapp_media').getPublicUrl(fileName);
+                    storageUrl = publicUrlData.publicUrl;
+                  }
+                }
+              } catch (err) {
+                console.error("Failed to store media in Supabase, falling back to dynamic fetch.", err.message);
+              }
             }
 
             const insertData = {
@@ -326,7 +396,14 @@ app.post('/api/webhooks/whatsapp', async (req, res) => {
             if (workspace_id) insertData.workspace_id = workspace_id;
 
             if (profileName) insertData.profile_name = profileName;
-            if (mediaId) insertData.media_id = mediaId;
+            
+            // If we successfully saved to storage, we'll store the URL in media_id.
+            // Otherwise fallback to raw mediaId for dynamic fetch.
+            if (storageUrl) {
+              insertData.media_id = storageUrl;
+            } else if (mediaId) {
+              insertData.media_id = mediaId;
+            }
 
             const { error } = await supabase.from('messages').insert([insertData]);
             
@@ -1129,11 +1206,11 @@ app.delete('/api/automations/:id', async (req, res) => {
  */
 app.post('/api/whatsapp/send', upload.single('file'), async (req, res) => {
   try {
-    const { phoneNumber, message, workspace_id } = req.body;
+    const { phoneNumber, message, workspace_id, messageType: reqMessageType, interactive, location } = req.body;
     const file = req.file;
     
-    if (!phoneNumber && !message && !file) {
-      return res.status(400).json({ error: 'phoneNumber and message or file are required' });
+    if (!phoneNumber && !message && !file && !interactive && !location) {
+      return res.status(400).json({ error: 'phoneNumber and message or file or interactive/location are required' });
     }
     if (!workspace_id) {
       return res.status(400).json({ error: 'workspace_id is required' });
@@ -1153,7 +1230,7 @@ app.post('/api/whatsapp/send', upload.single('file'), async (req, res) => {
     }
 
     let mediaId = null;
-    let messageType = 'text';
+    let messageType = reqMessageType || 'text';
 
     // If there is a file, upload it to Meta first
     if (file) {
@@ -1192,6 +1269,14 @@ app.post('/api/whatsapp/send', upload.single('file'), async (req, res) => {
     } else if (messageType === 'document') {
       payload.document = { id: mediaId, filename: file.originalname };
       if (message) payload.document.caption = message; // Some versions support caption for doc
+    } else if (messageType === 'interactive') {
+      let parsedInteractive = interactive;
+      if (typeof interactive === 'string') parsedInteractive = JSON.parse(interactive);
+      payload.interactive = parsedInteractive;
+    } else if (messageType === 'location') {
+      let parsedLocation = location;
+      if (typeof location === 'string') parsedLocation = JSON.parse(location);
+      payload.location = parsedLocation;
     }
 
     const url = `https://graph.facebook.com/v19.0/${phoneNumberId}/messages`;
@@ -1206,6 +1291,11 @@ app.post('/api/whatsapp/send', upload.single('file'), async (req, res) => {
       let finalContent = message || '';
       if (messageType === 'document') {
          finalContent = `[FILENAME]${file.originalname}[/FILENAME]${message || ''}`;
+      } else if (messageType === 'interactive') {
+         finalContent = '[Interactive Sent]';
+      } else if (messageType === 'location') {
+         let parsed = typeof location === 'string' ? JSON.parse(location) : location;
+         finalContent = `[LOCATION] ${parsed.latitude},${parsed.longitude} - ${parsed.name || ''}`;
       }
 
       const insertData = {

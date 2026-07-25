@@ -21,6 +21,7 @@ export default function WhatsAppInbox({ backendUrl, workspaceId, userId }) {
   const [team, setTeam] = useState([]);
   const [internalNotes, setInternalNotes] = useState([]);
   const [isInternalNote, setIsInternalNote] = useState(false);
+  const [showAttachMenu, setShowAttachMenu] = useState(false);
 
   const fileInputRef = useRef(null);
   const messagesEndRef = useRef(null);
@@ -208,6 +209,56 @@ export default function WhatsAppInbox({ backendUrl, workspaceId, userId }) {
       }
     } catch (e) {
       alert('Error sending: ' + e.message);
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const handleSendLocation = async (lat, lng, name, address) => {
+    if (!activeNumber) return;
+    setSending(true);
+    setShowAttachMenu(false);
+    try {
+      const formData = new FormData();
+      formData.append('phoneNumber', activeNumber);
+      formData.append('workspace_id', workspaceId);
+      formData.append('messageType', 'location');
+      formData.append('location', JSON.stringify({ latitude: lat, longitude: lng, name, address }));
+      
+      const res = await fetch(`${backendUrl}/api/whatsapp/send`, { method: 'POST', body: formData });
+      if (!res.ok) alert('Failed to send location');
+    } catch (e) {
+      alert('Error: ' + e.message);
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const handleSendQuickReplies = async (bodyText, buttonTexts) => {
+    if (!activeNumber || !bodyText || buttonTexts.length === 0) return;
+    setSending(true);
+    setShowAttachMenu(false);
+    try {
+      const interactive = {
+        type: 'button',
+        body: { text: bodyText },
+        action: {
+          buttons: buttonTexts.map((text, i) => ({
+            type: 'reply',
+            reply: { id: `btn_${i}`, title: text.substring(0, 20) }
+          }))
+        }
+      };
+      const formData = new FormData();
+      formData.append('phoneNumber', activeNumber);
+      formData.append('workspace_id', workspaceId);
+      formData.append('messageType', 'interactive');
+      formData.append('interactive', JSON.stringify(interactive));
+      
+      const res = await fetch(`${backendUrl}/api/whatsapp/send`, { method: 'POST', body: formData });
+      if (!res.ok) alert('Failed to send quick replies');
+    } catch (e) {
+      alert('Error: ' + e.message);
     } finally {
       setSending(false);
     }
@@ -463,13 +514,72 @@ export default function WhatsAppInbox({ backendUrl, workspaceId, userId }) {
                 const isInbound = msg.direction === 'inbound';
                 let docFilename = 'Document';
                 let docCaption = msg.content;
+                let locationCoords = null;
+                let locationName = null;
+
                 if (msg.type === 'document' && msg.content && msg.content.startsWith('[FILENAME]')) {
                   const match = msg.content.match(/^\[FILENAME\](.*?)\[\/FILENAME\]([\s\S]*)$/);
                   if (match) {
                     docFilename = match[1] || 'Document';
                     docCaption = match[2]?.trim() || '';
                   }
+                } else if (msg.type === 'location' && msg.content && msg.content.startsWith('[LOCATION]')) {
+                  const match = msg.content.match(/^\[LOCATION\]\s*([^-\n]+)(?:-\s*(.*))?$/);
+                  if (match) {
+                    locationCoords = match[1]?.trim();
+                    locationName = match[2]?.trim();
+                  }
                 }
+
+                const renderMedia = () => {
+                  if (!msg.media_id) return null;
+                  
+                  const isUrl = msg.media_id.startsWith('http');
+                  const mediaSrc = isUrl ? msg.media_id : `${backendUrl}/api/whatsapp/media/${msg.media_id}`;
+
+                  if (msg.type === 'document') {
+                    return (
+                      <a 
+                        href={isUrl ? msg.media_id : `${backendUrl}/api/whatsapp/media/${msg.media_id}?workspace_id=${workspaceId}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-3 p-3 bg-black/5 rounded-xl mb-2 mt-1 hover:bg-black/10 transition-colors"
+                      >
+                        <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center text-red-500 shadow-sm">
+                          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className={`text-sm font-medium truncate ${isInbound ? 'text-gray-900' : 'text-white'}`}>{docFilename}</p>
+                          <p className={`text-xs truncate ${isInbound ? 'text-gray-500' : 'text-blue-200'}`}>Click to open</p>
+                        </div>
+                      </a>
+                    );
+                  } else if (msg.type === 'video') {
+                    return (
+                      <video 
+                        src={mediaSrc} 
+                        controls 
+                        className="max-w-[280px] max-h-[280px] rounded-xl object-contain mb-2 mt-1 bg-black/5"
+                      />
+                    );
+                  } else if (msg.type === 'audio') {
+                    return (
+                      <audio 
+                        src={mediaSrc} 
+                        controls 
+                        className="max-w-[280px] mb-2 mt-1"
+                      />
+                    );
+                  } else {
+                    return (
+                      <img 
+                        src={mediaSrc} 
+                        alt="Media" 
+                        className="max-w-[240px] max-h-[240px] rounded-xl object-contain mb-2 mt-1 bg-black/5" 
+                      />
+                    );
+                  }
+                };
 
                 return (
                   <div key={idx} className={`flex flex-col ${isInbound ? 'items-start' : 'items-end'} group`}>
@@ -485,31 +595,35 @@ export default function WhatsAppInbox({ backendUrl, workspaceId, userId }) {
                           ? 'bg-[#f0f0f0] text-gray-900 rounded-2xl rounded-bl-sm' 
                           : 'bg-blue-600 text-white rounded-2xl rounded-br-sm'
                       }`}>
-                        {msg.media_id ? (
-                          msg.type === 'document' ? (
+                        {renderMedia()}
+                        {msg.type === 'location' ? (
+                          <div className="flex flex-col gap-2">
                             <a 
-                              href={`${backendUrl}/api/whatsapp/media/${msg.media_id}?workspace_id=${workspaceId}`}
-                              target="_blank"
+                              href={`https://maps.google.com/?q=${locationCoords}`} 
+                              target="_blank" 
                               rel="noopener noreferrer"
-                              className="flex items-center gap-3 p-3 bg-black/5 rounded-xl mb-2 mt-1 hover:bg-black/10 transition-colors"
+                              className="flex items-center gap-2 p-3 bg-black/5 rounded-xl hover:bg-black/10 transition-colors"
                             >
-                              <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center text-red-500 shadow-sm">
-                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
+                              <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center text-red-500 shadow-sm shrink-0">
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
                               </div>
                               <div className="flex-1 min-w-0">
-                                <p className={`text-sm font-medium truncate ${isInbound ? 'text-gray-900' : 'text-white'}`}>{docFilename}</p>
-                                <p className={`text-xs truncate ${isInbound ? 'text-gray-500' : 'text-blue-200'}`}>Click to open</p>
+                                <p className={`text-sm font-medium ${isInbound ? 'text-gray-900' : 'text-white'}`}>{locationName || 'Shared Location'}</p>
+                                <p className={`text-xs truncate ${isInbound ? 'text-gray-500' : 'text-blue-200'}`}>{locationCoords}</p>
                               </div>
                             </a>
-                          ) : (
-                            <img 
-                              src={`${backendUrl}/api/whatsapp/media/${msg.media_id}`} 
-                              alt="Media" 
-                              className="max-w-[240px] max-h-[240px] rounded-xl object-contain mb-2 mt-1 bg-black/5" 
-                            />
-                          )
-                        ) : null}
-                        {msg.type === 'document' ? (
+                          </div>
+                        ) : msg.type === 'interactive' && msg.content?.startsWith('[BUTTON]') ? (
+                          <div className="flex items-center gap-2 bg-blue-50 text-blue-700 px-3 py-2 rounded-lg border border-blue-100">
+                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122"></path></svg>
+                             <span className="font-medium text-sm">Tapped: {msg.content.replace('[BUTTON]', '').trim()}</span>
+                          </div>
+                        ) : msg.type === 'interactive' && msg.content?.startsWith('[LIST]') ? (
+                          <div className="flex items-center gap-2 bg-purple-50 text-purple-700 px-3 py-2 rounded-lg border border-purple-100">
+                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"></path></svg>
+                             <span className="font-medium text-sm">Selected: {msg.content.replace('[LIST]', '').trim()}</span>
+                          </div>
+                        ) : msg.type === 'document' ? (
                           docCaption && <p className="text-[15px] leading-relaxed whitespace-pre-wrap">{docCaption}</p>
                         ) : (
                           msg.content && <p className="text-[15px] leading-relaxed whitespace-pre-wrap">{msg.content}</p>
@@ -588,14 +702,58 @@ export default function WhatsAppInbox({ backendUrl, workspaceId, userId }) {
                       onChange={handleFileChange}
                       accept="image/*,application/pdf"
                     />
-                    <button 
-                      type="button"
-                      onClick={() => fileInputRef.current?.click()}
-                      className="p-3.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-full transition-colors flex-shrink-0 mb-0.5"
-                      title="Attach File"
-                    >
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"></path></svg>
-                    </button>
+                    <div className="relative">
+                      <button 
+                        type="button"
+                        onClick={() => setShowAttachMenu(!showAttachMenu)}
+                        className="p-3.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-full transition-colors flex-shrink-0 mb-0.5"
+                        title="Attachment Options"
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
+                      </button>
+                      
+                      {showAttachMenu && (
+                        <div className="absolute bottom-full left-0 mb-2 w-48 bg-white rounded-xl shadow-lg border border-gray-100 py-2 z-20 flex flex-col overflow-hidden">
+                          <button 
+                            type="button" 
+                            onClick={() => { setShowAttachMenu(false); fileInputRef.current?.click(); }}
+                            className="text-left px-4 py-2 hover:bg-gray-50 flex items-center gap-2 text-sm text-gray-700"
+                          >
+                            <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                            Image or Document
+                          </button>
+                          <button 
+                            type="button" 
+                            onClick={() => {
+                              const lat = prompt("Enter Latitude:");
+                              if (!lat) return;
+                              const lng = prompt("Enter Longitude:");
+                              if (!lng) return;
+                              const name = prompt("Enter Location Name:");
+                              handleSendLocation(lat, lng, name, "");
+                            }}
+                            className="text-left px-4 py-2 hover:bg-gray-50 flex items-center gap-2 text-sm text-gray-700"
+                          >
+                            <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                            Send Location
+                          </button>
+                          <button 
+                            type="button" 
+                            onClick={() => {
+                              const title = prompt("Message Text:");
+                              if (!title) return;
+                              const btns = prompt("Button Texts (comma separated, max 3):");
+                              if (!btns) return;
+                              handleSendQuickReplies(title, btns.split(',').slice(0,3).map(b => b.trim()));
+                            }}
+                            className="text-left px-4 py-2 hover:bg-gray-50 flex items-center gap-2 text-sm text-gray-700"
+                          >
+                            <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122"></path></svg>
+                            Quick Replies
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </>
                 )}
                 <div className="flex-1 relative">
