@@ -389,6 +389,114 @@ app.get('/api/whatsapp/conversations', async (req, res) => {
 });
 
 /**
+ * Get Workspace Team Members
+ */
+app.get('/api/workspaces/team', async (req, res) => {
+  if (!supabase) return res.status(500).json({ error: 'Supabase not configured' });
+  const { workspace_id } = req.query;
+  if (!workspace_id) return res.status(400).json({ error: 'workspace_id is required' });
+
+  try {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('id, full_name, role, auth_email:id (email)') // Assuming we can join if needed, but we'll just return what we have
+      .eq('workspace_id', workspace_id);
+    
+    if (error) throw error;
+    res.status(200).json(data);
+  } catch (error) {
+    console.error('Error fetching team:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+/**
+ * Assign Contact to Agent
+ */
+app.post('/api/contacts/:phone/assign', async (req, res) => {
+  if (!supabase) return res.status(500).json({ error: 'Supabase not configured' });
+  const { phone } = req.params;
+  const { workspace_id, assigned_to } = req.body;
+  
+  if (!workspace_id) return res.status(400).json({ error: 'workspace_id is required' });
+
+  try {
+    const { data, error } = await supabase
+      .from('contacts')
+      .upsert(
+        { phone_number: phone, workspace_id, assigned_to, category: 'Customer' },
+        { onConflict: 'phone_number' }
+      )
+      .select()
+      .single();
+    
+    if (error) throw error;
+    res.status(200).json({ success: true, data });
+  } catch (error) {
+    console.error('Error assigning contact:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+/**
+ * Add Internal Note
+ */
+app.post('/api/contacts/:phone/notes', async (req, res) => {
+  if (!supabase) return res.status(500).json({ error: 'Supabase not configured' });
+  const { phone } = req.params;
+  const { workspace_id, author_id, note_text } = req.body;
+  
+  if (!workspace_id || !author_id || !note_text) {
+    return res.status(400).json({ error: 'workspace_id, author_id, and note_text are required' });
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('internal_notes')
+      .insert([{
+        contact_phone: phone,
+        workspace_id,
+        author_id,
+        note_text
+      }])
+      .select()
+      .single();
+    
+    if (error) throw error;
+    res.status(200).json({ success: true, data });
+  } catch (error) {
+    console.error('Error adding note:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+/**
+ * Get Internal Notes for a Contact
+ */
+app.get('/api/contacts/:phone/notes', async (req, res) => {
+  if (!supabase) return res.status(500).json({ error: 'Supabase not configured' });
+  const { phone } = req.params;
+  const { workspace_id } = req.query;
+  
+  if (!workspace_id) return res.status(400).json({ error: 'workspace_id is required' });
+
+  try {
+    const { data, error } = await supabase
+      .from('internal_notes')
+      .select('*, author:profiles(full_name)')
+      .eq('contact_phone', phone)
+      .eq('workspace_id', workspace_id)
+      .order('created_at', { ascending: true });
+    
+    if (error) throw error;
+    res.status(200).json(data);
+  } catch (error) {
+    console.error('Error fetching notes:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+/**
  * Update Workspace Meta Credentials
  */
 app.post('/api/workspaces/update', async (req, res) => {

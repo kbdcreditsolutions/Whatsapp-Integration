@@ -6,6 +6,18 @@ const MetaSetupWizard = ({ workspaceId }) => {
   const [accessToken, setAccessToken] = useState('');
   const [status, setStatus] = useState({ type: '', message: '' });
   const [saving, setSaving] = useState(false);
+  const [team, setTeam] = useState([]);
+
+  React.useEffect(() => {
+    if (!workspaceId) return;
+    const backendUrl = import.meta.env.VITE_BACKEND_URL || (import.meta.env.DEV ? 'http://localhost:3000' : '');
+    fetch(`${backendUrl}/api/workspaces/team?workspace_id=${workspaceId}`)
+      .then(r => r.json())
+      .then(data => {
+        if (Array.isArray(data)) setTeam(data);
+      })
+      .catch(console.error);
+  }, [workspaceId]);
 
   const handleSave = async (e) => {
     e.preventDefault();
@@ -153,6 +165,34 @@ const MetaSetupWizard = ({ workspaceId }) => {
               <p className="text-xs text-red-500 mt-2 text-center">Cannot save: No workspace assigned to your account.</p>
             )}
           </form>
+        </div>
+
+        {/* Workspace Team */}
+        <div className="bg-gray-50 border border-gray-200 rounded-xl p-6 mt-8">
+          <h3 className="text-lg font-semibold text-gray-800 mb-4">Workspace Team</h3>
+          <p className="text-sm text-gray-600 mb-4">These users have access to the Inbox for this workspace.</p>
+          <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+            <ul className="divide-y divide-gray-200">
+              {team.length > 0 ? team.map(member => (
+                <li key={member.id} className="p-4 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold text-sm">
+                      {(member.full_name || member.auth_email?.email || '?').charAt(0).toUpperCase()}
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-gray-900">{member.full_name || 'No Name'}</p>
+                      <p className="text-xs text-gray-500">{member.auth_email?.email || 'Unknown Email'}</p>
+                    </div>
+                  </div>
+                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                    {member.role || 'Agent'}
+                  </span>
+                </li>
+              )) : (
+                <li className="p-4 text-sm text-gray-500 text-center">No team members found.</li>
+              )}
+            </ul>
+          </div>
         </div>
       </div>
     </div>

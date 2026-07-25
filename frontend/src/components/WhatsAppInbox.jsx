@@ -8,16 +8,20 @@ if (supabaseUrl && supabaseAnonKey) {
   supabase = createClient(supabaseUrl, supabaseAnonKey);
 }
 
-export default function WhatsAppInbox({ backendUrl, workspaceId }) {
+export default function WhatsAppInbox({ backendUrl, workspaceId, userId }) {
   const [conversations, setConversations] = useState({});
   const [activeNumber, setActiveNumber] = useState(null);
   const [loading, setLoading] = useState(true);
   const [replyText, setReplyText] = useState('');
   const [sending, setSending] = useState(false);
   const [contactsData, setContactsData] = useState({});
-  const [activeTab, setActiveTab] = useState('All'); // 'All', 'Lead', 'Customer', 'Spam'
+  const [activeTab, setActiveTab] = useState('All'); // 'All', 'Assigned to me', 'Lead', 'Customer', 'Spam'
   const [selectedFile, setSelectedFile] = useState(null);
   const [filePreviewUrl, setFilePreviewUrl] = useState(null);
+  const [team, setTeam] = useState([]);
+  const [internalNotes, setInternalNotes] = useState([]);
+  const [isInternalNote, setIsInternalNote] = useState(false);
+
   const fileInputRef = useRef(null);
   const messagesEndRef = useRef(null);
 
@@ -53,13 +57,24 @@ export default function WhatsAppInbox({ backendUrl, workspaceId }) {
         .eq('workspace_id', workspaceId);
       if (!error && data) {
         const contactMap = {};
-        data.forEach(c => contactMap[c.phone_number] = c.category);
+        data.forEach(c => contactMap[c.phone_number] = c);
         setContactsData(contactMap);
+      }
+    };
+
+    const fetchTeam = async () => {
+      try {
+        const res = await fetch(`${backendUrl}/api/workspaces/team?workspace_id=${workspaceId}`);
+        const data = await res.json();
+        setTeam(data);
+      } catch (e) {
+        console.error("Failed to load team", e);
       }
     };
 
     fetchMessages();
     fetchContacts();
+    fetchTeam();
 
     // Subscribe to real-time inserts
     const channel = supabase
@@ -68,7 +83,6 @@ export default function WhatsAppInbox({ backendUrl, workspaceId }) {
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'messages' },
         (payload) => {
-          console.log('New message received!', payload.new);
           setConversations((prev) => {
             const msg = payload.new;
             const existing = prev[msg.phone_number] || [];
@@ -83,7 +97,6 @@ export default function WhatsAppInbox({ backendUrl, workspaceId }) {
         'postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'messages' },
         (payload) => {
-          console.log('Message updated!', payload.new);
           setConversations((prev) => {
             const msg = payload.new;
             const existing = prev[msg.phone_number] || [];
@@ -99,7 +112,6 @@ export default function WhatsAppInbox({ backendUrl, workspaceId }) {
         'postgres_changes',
         { event: 'DELETE', schema: 'public', table: 'messages' },
         (payload) => {
-          console.log('Message deleted!', payload.old);
           setConversations((prev) => {
             const newConvos = { ...prev };
             for (const phone in newConvos) {
@@ -116,6 +128,24 @@ export default function WhatsAppInbox({ backendUrl, workspaceId }) {
       supabase.removeChannel(channel);
     };
   }, []);
+
+  // Fetch internal notes when activeNumber changes
+  useEffect(() => {
+    if (!activeNumber) {
+      setInternalNotes([]);
+      return;
+    }
+    const fetchNotes = async () => {
+      try {
+        const res = await fetch(`${backendUrl}/api/contacts/${activeNumber}/notes?workspace_id=${workspaceId}`);
+        const data = await res.json();
+        if (Array.isArray(data)) setInternalNotes(data);
+      } catch (e) {
+        console.error("Failed to fetch notes", e);
+      }
+    };
+    fetchNotes();
+  }, [activeNumber, workspaceId, backendUrl]);
 
   const groupMessages = (messages) => {
     const grouped = {};
@@ -139,28 +169,59 @@ export default function WhatsAppInbox({ backendUrl, workspaceId }) {
     if (!activeNumber || (!replyText.trim() && !selectedFile)) return;
     setSending(true);
     try {
-      const formData = new FormData();
-      formData.append('phoneNumber', activeNumber);
-      formData.append('workspace_id', workspaceId);
-      if (replyText.trim()) formData.append('message', replyText);
-      if (selectedFile) formData.append('file', selectedFile);
-
-      const res = await fetch(`${backendUrl}/api/whatsapp/send`, {
-        method: 'POST',
-        body: formData
-      });
-      const data = await res.json();
-      if (data.success) {
-         setReplyText('');
-         clearFile();
+      if (isInternalNote) {
+        if (!replyText.trim()) {
+           alert("Notes must contain text");
+           setSending(false);
+           return;
+        }
+        await fetch(`${backendUrl}/api/contacts/${activeNumber}/notes`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ workspace_id: workspaceId, author_id: userId, note_text: replyText })
+        });
+        const res = await fetch(`${backendUrl}/api/contacts/${activeNumber}/notes?workspace_id=${workspaceId}`);
+        setInternalNotes(await res.json());
+        setReplyText('');
+        clearFile();
       } else {
-         alert('Error sending reply: ' + (data.error?.message || 'Unknown error'));
+        const formData = new FormData();
+        formData.append('phoneNumber', activeNumber);
+        formData.append('workspace_id', workspaceId);
+        if (replyText.trim()) formData.append('message', replyText);
+        if (selectedFile) formData.append('file', selectedFile);
+
+        const res = await fetch(`${backendUrl}/api/whatsapp/send`, {
+          method: 'POST',
+          body: formData
+        });
+        const data = await res.json();
+        if (data.success) {
+           setReplyText('');
+           clearFile();
+        } else {
+           alert('Error sending reply: ' + (data.error?.message || 'Unknown error'));
+        }
       }
     } catch (e) {
-      alert('Error sending reply: ' + e.message);
+      alert('Error sending: ' + e.message);
     } finally {
       setSending(false);
     }
+  };
+
+  const handleAssign = async (assigned_to) => {
+    if (!activeNumber) return;
+    const value = assigned_to || null;
+    setContactsData(prev => ({ 
+      ...prev, 
+      [activeNumber]: { ...prev[activeNumber], assigned_to: value } 
+    }));
+    await fetch(`${backendUrl}/api/contacts/${activeNumber}/assign`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ workspace_id: workspaceId, assigned_to: value })
+    });
   };
 
   const handlePaste = (e) => {
@@ -206,24 +267,27 @@ export default function WhatsAppInbox({ backendUrl, workspaceId }) {
 
   const handleCategoryChange = async (newCategory) => {
     if (!activeNumber) return;
-    setContactsData(prev => ({ ...prev, [activeNumber]: newCategory }));
+    setContactsData(prev => ({ 
+      ...prev, 
+      [activeNumber]: { ...prev[activeNumber], category: newCategory } 
+    }));
     
     const { error } = await supabase.from('contacts').upsert({ 
       phone_number: activeNumber, 
       category: newCategory,
-      workspace_id: workspaceId
+      workspace_id: workspaceId,
+      assigned_to: contactsData[activeNumber]?.assigned_to || null
     }, { onConflict: 'phone_number' });
     
     if (error) {
-      alert('Error updating category. Did you run the SQL command to create the contacts table?');
+      alert('Error updating category.');
     }
   };
 
   if (!supabase) {
     return (
       <div className="glass-card rounded-2xl p-8 text-center text-red-400 max-w-md mx-auto mt-20">
-        <svg className="w-12 h-12 mx-auto mb-4 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
-        <p>Supabase is not configured. Please add keys to environment variables.</p>
+        <p>Supabase is not configured.</p>
       </div>
     );
   }
@@ -232,22 +296,26 @@ export default function WhatsAppInbox({ backendUrl, workspaceId }) {
   
   const contacts = allContacts.filter(num => {
     if (activeTab === 'All') return true;
-    const cat = contactsData[num] || 'Lead';
+    if (activeTab === 'Assigned to me') {
+       return contactsData[num]?.assigned_to === userId;
+    }
+    const cat = contactsData[num]?.category || 'Lead';
     return cat === activeTab;
   });
 
   const activeMessages = activeNumber ? conversations[activeNumber] : [];
+  const interleaved = [...activeMessages, ...internalNotes].sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
 
   useEffect(() => {
     scrollToBottom();
-  }, [activeMessages]);
+  }, [interleaved]);
 
   return (
     <div className="bg-white rounded-2xl flex h-[700px] overflow-hidden border border-gray-200 shadow-sm relative z-10">
       <div className="w-1/3 border-r border-gray-200 flex flex-col bg-[#f9f9fa]">
         <div className="p-5 font-semibold border-b border-gray-200 bg-white/80 backdrop-blur-md z-10">
           <div className="flex gap-2 overflow-x-auto pb-3 mb-3 border-b border-gray-100 hide-scrollbar">
-            {['All', 'Lead', 'Customer', 'Spam'].map(tab => (
+            {['All', 'Assigned to me', 'Lead', 'Customer', 'Spam'].map(tab => (
               <button 
                 key={tab}
                 onClick={() => setActiveTab(tab)}
@@ -270,13 +338,15 @@ export default function WhatsAppInbox({ backendUrl, workspaceId }) {
             </div>
           ) : contacts.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-32 text-gray-400">
-              <svg className="w-8 h-8 mb-2 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path></svg>
               <p className="text-sm">No conversations yet</p>
             </div>
           ) : (
             contacts.map((num) => {
               const name = getProfileName(num);
               const isActive = activeNumber === num;
+              const assigneeId = contactsData[num]?.assigned_to;
+              const assignee = team.find(t => t.id === assigneeId);
+              
               return (
                 <div 
                   key={num}
@@ -287,11 +357,12 @@ export default function WhatsAppInbox({ backendUrl, workspaceId }) {
                       : 'border-transparent hover:bg-gray-50'
                   }`}
                 >
-                  <div className={`font-medium ${isActive ? 'text-gray-900' : 'text-gray-700'}`}>
-                    {name || `+${num}`}
+                  <div className={`font-medium flex justify-between ${isActive ? 'text-gray-900' : 'text-gray-700'}`}>
+                    <span>{name || `+${num}`}</span>
+                    {assignee && <span className="text-[10px] bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">{assignee.full_name || 'Agent'}</span>}
                   </div>
                   <div className="text-xs text-gray-500 truncate mt-1.5 flex items-center gap-1.5">
-                    {name ? `+${num}` : (conversations[num][conversations[num].length - 1]?.content || 'Media Message')}
+                    {conversations[num][conversations[num].length - 1]?.content || 'Media Message'}
                   </div>
                 </div>
               );
@@ -313,9 +384,26 @@ export default function WhatsAppInbox({ backendUrl, workspaceId }) {
                 </div>
               </div>
               <div className="flex items-center gap-3">
+                <div className="relative flex items-center bg-purple-50 rounded-lg px-2 border border-purple-200 text-sm">
+                  <span className="text-purple-600 font-medium px-2 py-1">Assignee:</span>
+                  <select 
+                    value={contactsData[activeNumber]?.assigned_to || ''}
+                    onChange={(e) => handleAssign(e.target.value)}
+                    className="appearance-none bg-transparent py-2 pr-6 pl-1 text-gray-700 focus:outline-none cursor-pointer"
+                  >
+                    <option value="">Unassigned</option>
+                    {team.map(t => (
+                      <option key={t.id} value={t.id}>{t.full_name || t.auth_email?.email || 'Agent'}</option>
+                    ))}
+                  </select>
+                  <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-purple-400">
+                    <svg className="fill-current h-4 w-4" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
+                  </div>
+                </div>
+
                 <div className="relative">
                   <select 
-                    value={contactsData[activeNumber] || 'Lead'}
+                    value={contactsData[activeNumber]?.category || 'Lead'}
                     onChange={(e) => handleCategoryChange(e.target.value)}
                     className="appearance-none bg-gray-50 border border-gray-200 rounded-lg px-4 py-2 pr-8 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500/30 hover:bg-gray-100 transition-colors cursor-pointer"
                   >
@@ -338,9 +426,26 @@ export default function WhatsAppInbox({ backendUrl, workspaceId }) {
             </div>
             
             <div className="flex-1 overflow-y-auto p-6 space-y-6 z-10 custom-scrollbar">
-              {activeMessages.map((msg, idx) => {
+              {interleaved.map((msg, idx) => {
+                if (msg.note_text !== undefined) {
+                  // Internal Note Rendering
+                  return (
+                    <div key={`note-${idx}`} className="flex flex-col items-center group my-4">
+                      <div className="bg-yellow-100 text-yellow-800 border border-yellow-200 rounded-xl px-4 py-3 max-w-[80%] shadow-sm relative text-sm">
+                        <div className="font-semibold mb-1 text-yellow-900 flex items-center gap-2">
+                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
+                           Internal Note • {msg.author?.full_name || 'Agent'}
+                        </div>
+                        <div className="whitespace-pre-wrap">{msg.note_text}</div>
+                        <div className="text-[10px] text-yellow-700 mt-2 text-right opacity-70">
+                          {new Date(msg.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                }
+
                 const isInbound = msg.direction === 'inbound';
-                
                 let docFilename = 'Document';
                 let docCaption = msg.content;
                 if (msg.type === 'document' && msg.content && msg.content.startsWith('[FILENAME]')) {
@@ -425,8 +530,21 @@ export default function WhatsAppInbox({ backendUrl, workspaceId }) {
             </div>
             
             {/* Chat Input */}
-            <div className="p-5 bg-white z-10 border-t border-gray-100 flex flex-col gap-3">
-              {filePreviewUrl && (
+            <div className={`p-5 z-10 border-t border-gray-100 flex flex-col gap-3 transition-colors ${isInternalNote ? 'bg-yellow-50/50' : 'bg-white'}`}>
+              <div className="flex items-center gap-4 px-1 mb-1">
+                 <label className="flex items-center gap-2 text-sm font-medium cursor-pointer text-gray-600 hover:text-gray-900 transition-colors">
+                    <input 
+                      type="checkbox" 
+                      className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500" 
+                      checked={isInternalNote}
+                      onChange={(e) => setIsInternalNote(e.target.checked)}
+                    />
+                    Add Internal Note
+                 </label>
+                 {isInternalNote && <span className="text-xs text-yellow-600 bg-yellow-100 px-2 py-0.5 rounded-md font-medium">Only visible to your team</span>}
+              </div>
+
+              {filePreviewUrl && !isInternalNote && (
                 <div className="relative inline-block w-24 h-24 bg-gray-100 rounded-lg overflow-hidden border border-gray-200">
                   <button 
                     onClick={clearFile}
@@ -446,43 +564,47 @@ export default function WhatsAppInbox({ backendUrl, workspaceId }) {
               )}
               
               <form onSubmit={(e) => { e.preventDefault(); handleSendReply(); }} className="flex gap-3 items-end">
-                <input 
-                  type="file" 
-                  className="hidden" 
-                  ref={fileInputRef}
-                  onChange={handleFileChange}
-                  accept="image/*,application/pdf"
-                />
-                <button 
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="p-3.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-full transition-colors flex-shrink-0 mb-0.5"
-                  title="Attach File"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"></path></svg>
-                </button>
+                {!isInternalNote && (
+                  <>
+                    <input 
+                      type="file" 
+                      className="hidden" 
+                      ref={fileInputRef}
+                      onChange={handleFileChange}
+                      accept="image/*,application/pdf"
+                    />
+                    <button 
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="p-3.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-full transition-colors flex-shrink-0 mb-0.5"
+                      title="Attach File"
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"></path></svg>
+                    </button>
+                  </>
+                )}
                 <div className="flex-1 relative">
                   <input 
                     type="text" 
                     value={replyText}
                     onChange={(e) => setReplyText(e.target.value)}
-                    onPaste={handlePaste}
-                    placeholder={selectedFile ? "Add a caption..." : "Type your message or paste an image..."} 
-                    className="w-full bg-gray-100 border border-transparent rounded-full pl-5 pr-5 py-3 text-gray-900 placeholder-gray-500 focus:outline-none focus:bg-white focus:border-gray-200 focus:ring-4 focus:ring-blue-500/10 transition-all"
+                    onPaste={!isInternalNote ? handlePaste : undefined}
+                    placeholder={isInternalNote ? "Write a private note for your team..." : (selectedFile ? "Add a caption..." : "Type your message or paste an image...")} 
+                    className={`w-full border rounded-full pl-5 pr-5 py-3 text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-4 transition-all ${isInternalNote ? 'bg-yellow-50 border-yellow-200 focus:border-yellow-300 focus:ring-yellow-500/20' : 'bg-gray-100 border-transparent focus:bg-white focus:border-gray-200 focus:ring-blue-500/10'}`}
                     disabled={sending}
                   />
                 </div>
                 <button 
                   type="submit"
                   disabled={sending || (!replyText.trim() && !selectedFile)}
-                  className="bg-blue-600 hover:bg-blue-500 text-white rounded-full px-6 py-3 font-medium disabled:opacity-50 disabled:hover:bg-blue-600 transition-all flex items-center gap-2 shadow-sm active:scale-95 flex-shrink-0"
+                  className={`${isInternalNote ? 'bg-yellow-500 hover:bg-yellow-600 text-yellow-950' : 'bg-blue-600 hover:bg-blue-500 text-white'} rounded-full px-6 py-3 font-medium disabled:opacity-50 transition-all flex items-center gap-2 shadow-sm active:scale-95 flex-shrink-0`}
                 >
                   {sending ? (
-                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                    <div className={`w-5 h-5 border-2 border-t-transparent rounded-full animate-spin ${isInternalNote ? 'border-yellow-900/30' : 'border-white/30'}`}></div>
                   ) : (
                     <>
-                      <span>Send</span>
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path></svg>
+                      <span>{isInternalNote ? 'Save Note' : 'Send'}</span>
+                      {!isInternalNote && <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path></svg>}
                     </>
                   )}
                 </button>
