@@ -4,6 +4,8 @@ const cors = require('cors');
 const axios = require('axios');
 const multer = require('multer');
 const FormData = require('form-data');
+const csv = require('csv-parser');
+const stream = require('stream');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -522,7 +524,149 @@ app.get('/health', (req, res) => {
   res.status(200).json({ status: 'OK', message: 'WhatsApp multi-provider proxy is running' });
 });
 
+// --- ADVANCED CRM & CONTACT MANAGEMENT ---
+
+/**
+ * Get All Contacts for Workspace
+ */
+app.get('/api/contacts', async (req, res) => {
+  if (!supabase) return res.status(500).json({ error: 'Supabase not configured' });
+  const { workspace_id } = req.query;
+  
+  if (!workspace_id) return res.status(400).json({ error: 'workspace_id is required' });
+
+  try {
+    const { data, error } = await supabase
+      .from('contacts')
+      .select('*, assigned_to_profile:profiles(full_name)')
+      .eq('workspace_id', workspace_id)
+      .order('created_at', { ascending: false });
+    
+    if (error) throw error;
+    res.status(200).json(data);
+  } catch (error) {
+    console.error('Error fetching contacts:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+/**
+ * Update Contact
+ */
+app.patch('/api/contacts/:phone', async (req, res) => {
+  if (!supabase) return res.status(500).json({ error: 'Supabase not configured' });
+  const { phone } = req.params;
+  const { workspace_id, name, email, tags, custom_attributes, category } = req.body;
+  
+  if (!workspace_id) return res.status(400).json({ error: 'workspace_id is required' });
+
+  const updateData = {};
+  if (name !== undefined) updateData.name = name;
+  if (email !== undefined) updateData.email = email;
+  if (tags !== undefined) updateData.tags = tags;
+  if (custom_attributes !== undefined) updateData.custom_attributes = custom_attributes;
+  if (category !== undefined) updateData.category = category;
+
+  try {
+    const { data, error } = await supabase
+      .from('contacts')
+      .update(updateData)
+      .eq('phone_number', phone)
+      .eq('workspace_id', workspace_id)
+      .select()
+      .single();
+    
+    if (error) throw error;
+    res.status(200).json({ success: true, data });
+  } catch (error) {
+    console.error('Error updating contact:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 16 * 1024 * 1024 } }); // 16MB limit
+
+/**
+ * Import Contacts via CSV
+ */
+app.post('/api/contacts/import', upload.single('file'), async (req, res) => {
+  if (!supabase) return res.status(500).json({ error: 'Supabase not configured' });
+  const { workspace_id } = req.body;
+  const file = req.file;
+
+  if (!workspace_id) return res.status(400).json({ error: 'workspace_id is required' });
+  if (!file) return res.status(400).json({ error: 'CSV file is required' });
+
+  const results = [];
+  const bufferStream = new stream.PassThrough();
+  bufferStream.end(file.buffer);
+
+  bufferStream
+    .pipe(csv())
+    .on('data', (data) => results.push(data))
+    .on('end', async () => {
+      let successCount = 0;
+      let errorCount = 0;
+      
+      for (const row of results) {
+        let phone = row.phone || row.phone_number || row.phoneNumber || row.Phone;
+        if (!phone) {
+          errorCount++;
+          continue;
+        }
+        
+        // Clean phone number (digits only)
+        phone = phone.replace(/\D/g, '');
+
+        const name = row.name || row.Name || row.full_name;
+        const email = row.email || row.Email;
+        const tagsRaw = row.tags || row.Tags;
+        const tags = tagsRaw ? tagsRaw.split(',').map(t => t.trim()) : [];
+        
+        // Collect extra fields as custom attributes
+        const custom_attributes = { ...row };
+        delete custom_attributes.phone;
+        delete custom_attributes.phone_number;
+        delete custom_attributes.phoneNumber;
+        delete custom_attributes.Phone;
+        delete custom_attributes.name;
+        delete custom_attributes.Name;
+        delete custom_attributes.full_name;
+        delete custom_attributes.email;
+        delete custom_attributes.Email;
+        delete custom_attributes.tags;
+        delete custom_attributes.Tags;
+
+        try {
+          const { error } = await supabase
+            .from('contacts')
+            .upsert({ 
+              phone_number: phone, 
+              workspace_id,
+              name: name || null,
+              email: email || null,
+              tags,
+              custom_attributes,
+              category: 'Lead' // Default category
+            }, { onConflict: 'phone_number' });
+
+          if (error) {
+            console.error('Error upserting row:', error);
+            errorCount++;
+          } else {
+            successCount++;
+          }
+        } catch (err) {
+          errorCount++;
+        }
+      }
+
+      res.status(200).json({ 
+        success: true, 
+        message: `Imported ${successCount} contacts. ${errorCount} failed.` 
+      });
+    });
+});
 
 /**
  * Send Free-form text Reply (Outbound) or Media Message

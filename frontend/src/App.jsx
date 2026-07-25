@@ -5,6 +5,7 @@ import { supabase } from './supabaseClient'
 import WhatsAppCampaignWidget from './components/WhatsAppCampaignWidget'
 import MetaSetupWizard from './components/MetaSetupWizard'
 import WhatsAppInbox from './components/WhatsAppInbox'
+import ContactManager from './components/ContactManager'
 
 function App() {
   const [activeTab, setActiveTab] = useState('inbox');
@@ -92,6 +93,12 @@ function App() {
                   Campaigns
                 </button>
                 <button 
+                  onClick={() => setActiveTab('contacts')}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === 'contacts' ? 'bg-gray-100 text-gray-900' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-700'}`}
+                >
+                  Contacts
+                </button>
+                <button 
                   onClick={() => setActiveTab('setup')}
                   className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === 'setup' ? 'bg-gray-100 text-gray-900' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-700'}`}
                 >
@@ -138,6 +145,15 @@ function App() {
                 <WhatsAppCampaignWidget 
                   backendUrl={import.meta.env.VITE_BACKEND_URL || (import.meta.env.DEV ? 'http://localhost:3000' : '')} 
                   workspaceId={workspaceId}
+                />
+              </div>
+            )}
+
+            {activeTab === 'contacts' && (
+              <div className="mb-6">
+                <ContactManager 
+                  backendUrl={import.meta.env.VITE_BACKEND_URL || (import.meta.env.DEV ? 'http://localhost:3000' : '')} 
+                  workspaceId={workspaceId} 
                 />
               </div>
             )}

@@ -157,6 +157,9 @@ export default function WhatsAppInbox({ backendUrl, workspaceId, userId }) {
   };
 
   const getProfileName = (num) => {
+    if (contactsData[num] && contactsData[num].name) {
+      return contactsData[num].name;
+    }
     const msgs = conversations[num] || [];
     const inboundMsgs = msgs.filter(m => m.direction === 'inbound' && m.profile_name);
     if (inboundMsgs.length > 0) {
@@ -358,9 +361,16 @@ export default function WhatsAppInbox({ backendUrl, workspaceId, userId }) {
                   }`}
                 >
                   <div className={`font-medium flex justify-between ${isActive ? 'text-gray-900' : 'text-gray-700'}`}>
-                    <span>{name || `+${num}`}</span>
-                    {assignee && <span className="text-[10px] bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">{assignee.full_name || 'Agent'}</span>}
+                    <span className="truncate pr-2">{name || `+${num}`}</span>
+                    {assignee && <span className="text-[10px] bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full whitespace-nowrap">{assignee.full_name || 'Agent'}</span>}
                   </div>
+                  {contactsData[num]?.tags && contactsData[num].tags.length > 0 && (
+                    <div className="flex gap-1 mt-1 overflow-hidden">
+                      {contactsData[num].tags.map(t => (
+                        <span key={t} className="text-[9px] px-1.5 py-0.5 bg-gray-100 border border-gray-200 text-gray-500 rounded truncate">{t}</span>
+                      ))}
+                    </div>
+                  )}
                   <div className="text-xs text-gray-500 truncate mt-1.5 flex items-center gap-1.5">
                     {conversations[num][conversations[num].length - 1]?.content || 'Media Message'}
                   </div>
@@ -380,7 +390,12 @@ export default function WhatsAppInbox({ backendUrl, workspaceId, userId }) {
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>
                 </div>
                 <div>
-                  <div className="text-gray-900 text-lg">{getProfileName(activeNumber) || `+${activeNumber}`}</div>
+                  <div className="text-gray-900 text-lg flex items-center gap-2">
+                    {getProfileName(activeNumber) || `+${activeNumber}`}
+                    {contactsData[activeNumber]?.tags?.map(t => (
+                      <span key={t} className="text-[10px] px-2 py-0.5 bg-gray-100 border border-gray-200 text-gray-600 rounded-full font-medium">{t}</span>
+                    ))}
+                  </div>
                 </div>
               </div>
               <div className="flex items-center gap-3">
