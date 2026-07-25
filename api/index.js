@@ -503,12 +503,15 @@ app.get('/api/contacts/:phone/notes', async (req, res) => {
  */
 app.post('/api/workspaces/update', async (req, res) => {
   try {
-    const { workspace_id, meta_access_token, meta_phone_number_id } = req.body;
+    const { workspace_id, meta_access_token, meta_phone_number_id, meta_waba_id } = req.body;
     if (!workspace_id) return res.status(400).json({ error: 'workspace_id is required' });
+
+    const updatePayload = { meta_access_token, meta_phone_number_id };
+    if (meta_waba_id) updatePayload.meta_waba_id = meta_waba_id;
 
     const { error } = await supabase
       .from('workspaces')
-      .update({ meta_access_token, meta_phone_number_id })
+      .update(updatePayload)
       .eq('id', workspace_id);
     
     if (error) throw error;
@@ -590,6 +593,320 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 16 
  * Import Contacts via CSV
  */
 app.post('/api/contacts/import', upload.single('file'), async (req, res) => {
+  // ... (import logic is already here)
+}); // End of import Contacts
+
+/**
+ * Sync Meta Templates
+ */
+app.get('/api/meta/templates/sync', async (req, res) => {
+  if (!supabase) return res.status(500).json({ error: 'Supabase not configured' });
+  const { workspace_id } = req.query;
+  
+  if (!workspace_id) return res.status(400).json({ error: 'workspace_id is required' });
+
+  try {
+    const { data: ws } = await supabase.from('workspaces').select('meta_waba_id, meta_access_token').eq('id', workspace_id).single();
+    if (!ws || !ws.meta_waba_id || !ws.meta_access_token) {
+      return res.status(400).json({ error: 'WhatsApp Business Account ID (WABA ID) and Access Token are required in Setup.' });
+    }
+
+    const response = await axios.get(`https://graph.facebook.com/v19.0/${ws.meta_waba_id}/message_templates?limit=100`, {
+      headers: { 'Authorization': `Bearer ${ws.meta_access_token}` }
+    });
+
+    const metaTemplates = response.data.data;
+    let upsertCount = 0;
+
+    for (const t of metaTemplates) {
+      const { data: existing } = await supabase
+        .from('templates')
+        .select('id')
+        .eq('workspace_id', workspace_id)
+        .eq('name', t.name)
+        .eq('language', t.language)
+        .single();
+        
+      if (existing) {
+        await supabase.from('templates').update({
+          category: t.category,
+          components: t.components,
+          status: t.status,
+          meta_template_id: t.id
+        }).eq('id', existing.id);
+      } else {
+        await supabase.from('templates').insert([{
+          workspace_id,
+          name: t.name,
+          language: t.language,
+          category: t.category,
+          components: t.components,
+          status: t.status,
+          meta_template_id: t.id
+        }]);
+      }
+      upsertCount++;
+    }
+
+    res.status(200).json({ success: true, count: upsertCount });
+  } catch (error) {
+    console.error('Error syncing templates:', error.response?.data || error.message);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+/**
+ * Create Meta Template
+ */
+app.post('/api/meta/templates', async (req, res) => {
+  if (!supabase) return res.status(500).json({ error: 'Supabase not configured' });
+  const { workspace_id, name, language, category, components } = req.body;
+  
+  if (!workspace_id || !name || !language || !category || !components) {
+    return res.status(400).json({ error: 'Missing required fields' });
+  }
+
+  try {
+    const { data: ws } = await supabase.from('workspaces').select('meta_waba_id, meta_access_token').eq('id', workspace_id).single();
+    if (!ws || !ws.meta_waba_id || !ws.meta_access_token) {
+      return res.status(400).json({ error: 'WhatsApp Business Account ID (WABA ID) and Access Token are required in Setup.' });
+    }
+
+    // Submit to Meta
+    const response = await axios.post(`https://graph.facebook.com/v19.0/${ws.meta_waba_id}/message_templates`, {
+      name,
+      language,
+      category,
+      components
+    }, {
+      headers: { 'Authorization': `Bearer ${ws.meta_access_token}` }
+    });
+
+    const meta_template_id = response.data.id;
+    
+    // Save to database as PENDING
+    const { data, error } = await supabase.from('templates').insert([{
+      workspace_id,
+      name,
+      language,
+      category,
+      components,
+      status: 'PENDING',
+      meta_template_id
+    }]).select().single();
+    
+    if (error) throw error;
+    res.status(200).json({ success: true, data });
+  } catch (error) {
+    console.error('Error creating template:', error.response?.data?.error || error.message);
+    res.status(500).json({ error: error.response?.data?.error?.message || 'Internal Server Error' });
+  }
+});
+
+/**
+ * Get Saved Templates
+ */
+app.get('/api/templates', async (req, res) => {
+  if (!supabase) return res.status(500).json({ error: 'Supabase not configured' });
+  const { workspace_id } = req.query;
+  
+  if (!workspace_id) return res.status(400).json({ error: 'workspace_id is required' });
+
+  try {
+    const { data, error } = await supabase
+      .from('templates')
+      .select('*')
+      .eq('workspace_id', workspace_id)
+      .order('created_at', { ascending: false });
+    
+    if (error) throw error;
+    res.status(200).json(data);
+  } catch (error) {
+    console.error('Error fetching templates:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+/**
+ * Launch Campaign
+ */
+app.post('/api/campaigns/:id/launch', async (req, res) => {
+  if (!supabase) return res.status(500).json({ error: 'Supabase not configured' });
+  const { id } = req.params;
+  const { workspace_id, variable_mapping } = req.body;
+
+  if (!workspace_id) return res.status(400).json({ error: 'workspace_id is required' });
+
+  try {
+    const { data: campaign } = await supabase.from('campaigns').select('*, templates(*)').eq('id', id).eq('workspace_id', workspace_id).single();
+    if (!campaign) return res.status(404).json({ error: 'Campaign not found' });
+    
+    if (campaign.status !== 'DRAFT') {
+      return res.status(400).json({ error: 'Campaign has already been launched.' });
+    }
+
+    const { data: ws } = await supabase.from('workspaces').select('meta_access_token, meta_phone_number_id').eq('id', workspace_id).single();
+    if (!ws || !ws.meta_access_token) return res.status(400).json({ error: 'Meta token missing.' });
+
+    // Mark as SENDING
+    await supabase.from('campaigns').update({ status: 'SENDING' }).eq('id', id);
+
+    // Fetch Audience
+    let query = supabase.from('contacts').select('*').eq('workspace_id', workspace_id);
+    if (campaign.audience_tags && campaign.audience_tags.length > 0) {
+      query = query.contains('tags', campaign.audience_tags);
+    }
+    const { data: audience } = await query;
+    
+    if (!audience || audience.length === 0) {
+      await supabase.from('campaigns').update({ status: 'COMPLETED' }).eq('id', id);
+      return res.status(400).json({ error: 'Audience is empty based on selected tags.' });
+    }
+
+    res.status(200).json({ success: true, message: `Campaign launched to ${audience.length} contacts.` });
+
+    // BACKGROUND PROCESSING (Simple Promise Loop for MVP)
+    (async () => {
+      let sentCount = 0;
+      let failedCount = 0;
+      
+      for (const contact of audience) {
+        // Construct message parameters based on mapping
+        // variable_mapping: { "1": "name", "2": "custom_attributes.order_id" }
+        const parameters = [];
+        if (variable_mapping) {
+          for (const key of Object.keys(variable_mapping).sort()) {
+            const attrPath = variable_mapping[key];
+            let value = '';
+            if (attrPath === 'name') value = contact.name || '';
+            else if (attrPath.startsWith('custom_attributes.')) {
+              const attrKey = attrPath.replace('custom_attributes.', '');
+              value = (contact.custom_attributes && contact.custom_attributes[attrKey]) || '';
+            }
+            parameters.push({ type: 'text', text: value });
+          }
+        }
+
+        const payload = {
+          messaging_product: "whatsapp",
+          recipient_type: "individual",
+          to: contact.phone_number,
+          type: "template",
+          template: {
+            name: campaign.templates.name,
+            language: { code: campaign.templates.language },
+            components: parameters.length > 0 ? [{ type: "body", parameters }] : []
+          }
+        };
+
+        try {
+          const url = `https://graph.facebook.com/v19.0/${ws.meta_phone_number_id}/messages`;
+          const response = await axios.post(url, payload, { 
+            headers: { 'Authorization': `Bearer ${ws.meta_access_token}` } 
+          });
+
+          sentCount++;
+          const messageId = response.data.messages[0].id;
+          
+          await supabase.from('campaign_logs').insert([{
+             campaign_id: id,
+             workspace_id,
+             contact_phone: contact.phone_number,
+             status: 'sent',
+             message_id: messageId
+          }]);
+          
+          // Also track in general messages table
+          await supabase.from('messages').insert([{
+             workspace_id,
+             phone_number: contact.phone_number,
+             message_id: messageId,
+             direction: 'outbound',
+             type: 'template',
+             content: `Campaign: ${campaign.name} (${campaign.templates.name})`,
+             status: 'sent'
+          }]);
+
+        } catch (err) {
+          failedCount++;
+          await supabase.from('campaign_logs').insert([{
+             campaign_id: id,
+             workspace_id,
+             contact_phone: contact.phone_number,
+             status: 'failed',
+             error_message: err.response?.data?.error?.message || err.message
+          }]);
+        }
+        
+        // Basic throttling (Wait 50ms between requests)
+        await new Promise(r => setTimeout(r, 50));
+      }
+
+      await supabase.from('campaigns').update({
+        status: 'COMPLETED',
+        analytics: { sent: sentCount, delivered: 0, read: 0, failed: failedCount }
+      }).eq('id', id);
+
+    })();
+
+  } catch (error) {
+    console.error('Error launching campaign:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+/**
+ * Create Campaign
+ */
+app.post('/api/campaigns', async (req, res) => {
+  if (!supabase) return res.status(500).json({ error: 'Supabase not configured' });
+  const { workspace_id, name, template_id, audience_tags } = req.body;
+
+  if (!workspace_id || !name || !template_id) return res.status(400).json({ error: 'Missing required fields' });
+
+  try {
+    const { data, error } = await supabase.from('campaigns').insert([{
+      workspace_id, name, template_id, audience_tags
+    }]).select().single();
+    if (error) throw error;
+    res.status(200).json(data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * Get Campaigns
+ */
+app.get('/api/campaigns', async (req, res) => {
+  if (!supabase) return res.status(500).json({ error: 'Supabase not configured' });
+  const { workspace_id } = req.query;
+  
+  try {
+    const { data, error } = await supabase.from('campaigns').select('*, templates(*)').eq('workspace_id', workspace_id).order('created_at', { ascending: false });
+    if (error) throw error;
+    res.status(200).json(data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * Get Campaign Logs
+ */
+app.get('/api/campaigns/:id/logs', async (req, res) => {
+  if (!supabase) return res.status(500).json({ error: 'Supabase not configured' });
+  const { id } = req.params;
+  const { workspace_id } = req.query;
+  
+  try {
+    const { data, error } = await supabase.from('campaign_logs').select('*').eq('campaign_id', id).eq('workspace_id', workspace_id).order('created_at', { ascending: false });
+    if (error) throw error;
+    res.status(200).json(data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
   if (!supabase) return res.status(500).json({ error: 'Supabase not configured' });
   const { workspace_id } = req.body;
   const file = req.file;

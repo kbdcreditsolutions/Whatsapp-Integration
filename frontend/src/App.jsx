@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { Auth } from '@supabase/auth-ui-react'
 import { ThemeSupa } from '@supabase/auth-ui-shared'
 import { supabase } from './supabaseClient'
-import WhatsAppCampaignWidget from './components/WhatsAppCampaignWidget'
+import CampaignDashboard from './components/CampaignDashboard'
 import MetaSetupWizard from './components/MetaSetupWizard'
 import WhatsAppInbox from './components/WhatsAppInbox'
 import ContactManager from './components/ContactManager'
@@ -140,12 +140,8 @@ function App() {
             )}
             
             {activeTab === 'campaigns' && (
-              <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8">
-                <h2 className="text-2xl font-semibold text-gray-900 mb-6">Send Campaigns</h2>
-                <WhatsAppCampaignWidget 
-                  backendUrl={import.meta.env.VITE_BACKEND_URL || (import.meta.env.DEV ? 'http://localhost:3000' : '')} 
-                  workspaceId={workspaceId}
-                />
+              <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-2 md:p-8">
+                <CampaignDashboard workspaceId={workspaceId} />
               </div>
             )}
 

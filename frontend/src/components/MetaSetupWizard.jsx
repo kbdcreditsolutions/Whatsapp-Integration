@@ -3,6 +3,7 @@ import axios from 'axios';
 
 const MetaSetupWizard = ({ workspaceId }) => {
   const [phoneId, setPhoneId] = useState('');
+  const [wabaId, setWabaId] = useState('');
   const [accessToken, setAccessToken] = useState('');
   const [status, setStatus] = useState({ type: '', message: '' });
   const [saving, setSaving] = useState(false);
@@ -29,6 +30,7 @@ const MetaSetupWizard = ({ workspaceId }) => {
       const res = await axios.post(`${backendUrl}/api/workspaces/update`, {
         workspace_id: workspaceId,
         meta_phone_number_id: phoneId,
+        meta_waba_id: wabaId,
         meta_access_token: accessToken
       });
 
@@ -142,6 +144,18 @@ const MetaSetupWizard = ({ workspaceId }) => {
                 placeholder="e.g. 101234567891011"
                 required
               />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">WhatsApp Business Account ID (WABA ID)</label>
+              <input 
+                type="text" 
+                value={wabaId} 
+                onChange={(e) => setWabaId(e.target.value)} 
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                placeholder="e.g. 101234567891011"
+                required
+              />
+              <p className="text-xs text-gray-500 mt-1">Required for Campaign Broadcasts and Template Sync.</p>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Permanent Access Token</label>
