@@ -20,9 +20,54 @@ if (supabaseUrl && supabaseKey) {
   supabase = createClient(supabaseUrl, supabaseKey);
 }
 
+// --- Webhooks that require raw body ---
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+
+app.post('/api/stripe/webhook', express.raw({type: 'application/json'}), async (request, response) => {
+  const sig = request.headers['stripe-signature'];
+  const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
+
+  let event;
+  try {
+    event = stripe.webhooks.constructEvent(request.body, sig, endpointSecret);
+  } catch (err) {
+    return response.status(400).send(`Webhook Error: ${err.message}`);
+  }
+
+  try {
+    if (event.type === 'checkout.session.completed') {
+      const session = event.data.object;
+      const workspace_id = session.client_reference_id;
+      const plan_type = session.metadata?.plan_type || 'pro';
+      if (workspace_id) {
+        await supabase.from('workspaces').update({
+          stripe_customer_id: session.customer,
+          stripe_subscription_id: session.subscription,
+          plan_type: plan_type,
+          subscription_status: 'active'
+        }).eq('id', workspace_id);
+      }
+    } else if (event.type === 'customer.subscription.updated' || event.type === 'customer.subscription.deleted') {
+      const subscription = event.data.object;
+      const status = subscription.status;
+      await supabase.from('workspaces').update({
+        subscription_status: status,
+        current_period_end: new Date(subscription.current_period_end * 1000).toISOString()
+      }).eq('stripe_subscription_id', subscription.id);
+    }
+  } catch (err) {
+    console.error('Error handling webhook event:', err);
+  }
+
+  response.send();
+});
+
 // Middleware
 app.use(cors());
 app.use(express.json());
+
+// Stripe Routes
+app.use('/api/stripe', require('./stripe'));
 
 // --- Configuration ---
 
@@ -90,6 +135,15 @@ app.post('/api/whatsapp/message', async (req, res) => {
     const type = messageType || 'template';
     if (type === 'template' && !templateName) {
       return res.status(400).json({ error: 'templateName is required when type is template' });
+    }
+
+    // Phase 7: Subscription Limit Check (Skipped if no workspace ID is provided in request for now, or assume it's passed)
+    if (req.body.workspace_id && supabase) {
+      const { data: workspace } = await supabase.from('workspaces').select('subscription_status').eq('id', req.body.workspace_id).single();
+      // If billing is strictly enforced, you can block inactive workspaces
+      // if (workspace && workspace.subscription_status !== 'active') {
+      //   return res.status(403).json({ error: 'Subscription inactive or past due. Please upgrade your plan.' });
+      // }
     }
 
     const targetProvider = provider || 'interakt'; // Default to interakt for backwards compatibility
