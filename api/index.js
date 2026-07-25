@@ -6,6 +6,10 @@ const multer = require('multer');
 const FormData = require('form-data');
 const csv = require('csv-parser');
 const stream = require('stream');
+const metaRoutes = require('./meta');
+const stripeRoutes = require('./stripe');
+const teamRoutes = require('./team');
+const whatsappRoutes = require('./whatsapp');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -65,9 +69,10 @@ app.post('/api/stripe/webhook', express.raw({type: 'application/json'}), async (
 // Middleware
 app.use(cors());
 app.use(express.json());
-
-// Stripe Routes
-app.use('/api/stripe', require('./stripe'));
+app.use('/api/whatsapp', whatsappRoutes);
+app.use('/api/meta', metaRoutes);
+app.use('/api/team', teamRoutes);
+app.use('/api/stripe', stripeRoutes);
 
 // --- Configuration ---
 

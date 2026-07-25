@@ -1,0 +1,8 @@
+{
+  "framework": null,
+  "rewrites": [
+    { "source": "/api/run-migration", "destination": "/api/migrate_run.js" },
+    { "source": "/api/(.*)", "destination": "/api/index.js" },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+}
