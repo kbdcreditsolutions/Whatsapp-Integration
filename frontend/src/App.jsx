@@ -9,6 +9,9 @@ import ContactManager from './components/ContactManager'
 import AutomationManager from './components/AutomationManager'
 import BillingDashboard from './components/BillingDashboard'
 import TeamSettings from './components/TeamSettings'
+import AnalyticsDashboard from './components/AnalyticsDashboard'
+import { Toaster } from 'react-hot-toast'
+import { Inbox, Users, Send, Settings, ShieldCheck, CreditCard, BarChart } from 'lucide-react'
 
 function App() {
   const [activeTab, setActiveTab] = useState('inbox');
@@ -116,6 +119,7 @@ function App() {
 
   return (
     <div className="min-h-screen bg-[#f5f5f7] font-sans">
+      <Toaster position="top-right" />
       <nav className="bg-white/80 backdrop-blur-md border-b border-gray-200 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex h-16 items-center justify-between">
@@ -124,48 +128,64 @@ function App() {
               <div className="flex gap-1">
                 <button 
                   onClick={() => setActiveTab('inbox')}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === 'inbox' ? 'bg-gray-100 text-gray-900' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-700'}`}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === 'inbox' ? 'bg-gray-100 text-gray-900' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-700'}`}
                 >
+                  <Inbox size={18} />
                   Inbox
                 </button>
                 <button 
                   onClick={() => setActiveTab('contacts')}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === 'contacts' ? 'bg-gray-100 text-gray-900' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-700'}`}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === 'contacts' ? 'bg-gray-100 text-gray-900' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-700'}`}
                 >
+                  <Users size={18} />
                   Contacts
                 </button>
                 {(userRole === 'admin' || userRole === 'manager') && (
-                  <button 
-                    onClick={() => setActiveTab('campaigns')}
-                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === 'campaigns' ? 'bg-gray-100 text-gray-900' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-700'}`}
-                  >
-                    Campaigns
-                  </button>
+                  <>
+                    <button 
+                      onClick={() => setActiveTab('campaigns')}
+                      className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === 'campaigns' ? 'bg-gray-100 text-gray-900' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-700'}`}
+                    >
+                      <Send size={18} />
+                      Campaigns
+                    </button>
+                    <button 
+                      onClick={() => setActiveTab('analytics')}
+                      className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === 'analytics' ? 'bg-gray-100 text-gray-900' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-700'}`}
+                    >
+                      <BarChart size={18} />
+                      Analytics
+                    </button>
+                  </>
                 )}
                 {userRole === 'admin' && (
                   <>
                     <button 
                       onClick={() => setActiveTab('automation')}
-                      className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === 'automation' ? 'bg-gray-100 text-gray-900' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-700'}`}
+                      className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === 'automation' ? 'bg-gray-100 text-gray-900' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-700'}`}
                     >
+                      <Settings size={18} />
                       Automation
                     </button>
                     <button 
                       onClick={() => setActiveTab('team')}
-                      className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === 'team' ? 'bg-gray-100 text-gray-900' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-700'}`}
+                      className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === 'team' ? 'bg-gray-100 text-gray-900' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-700'}`}
                     >
+                      <ShieldCheck size={18} />
                       Team
                     </button>
                     <button 
                       onClick={() => setActiveTab('setup')}
-                      className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === 'setup' ? 'bg-gray-100 text-gray-900' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-700'}`}
+                      className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === 'setup' ? 'bg-gray-100 text-gray-900' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-700'}`}
                     >
+                      <Settings size={18} />
                       Setup
                     </button>
                     <button 
                       onClick={() => setActiveTab('billing')}
-                      className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === 'billing' ? 'bg-gray-100 text-gray-900' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-700'}`}
+                      className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === 'billing' ? 'bg-gray-100 text-gray-900' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-700'}`}
                     >
+                      <CreditCard size={18} />
                       Billing
                     </button>
                   </>
@@ -208,6 +228,12 @@ function App() {
             {activeTab === 'campaigns' && (userRole === 'admin' || userRole === 'manager') && (
               <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-2 md:p-8">
                 <CampaignDashboard workspaceId={workspaceId} />
+              </div>
+            )}
+
+            {activeTab === 'analytics' && (userRole === 'admin' || userRole === 'manager') && (
+              <div className="bg-transparent mt-4">
+                <AnalyticsDashboard workspaceId={workspaceId} />
               </div>
             )}
 

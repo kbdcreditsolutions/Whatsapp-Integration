@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
+import toast from 'react-hot-toast';
 
 function TeamSettings({ workspaceId }) {
   const [members, setMembers] = useState([]);
@@ -62,11 +63,11 @@ function TeamSettings({ workspaceId }) {
         setInviteEmail('');
         fetchTeam(); // Refresh invites list
       } else {
-        alert('Failed to generate invite: ' + (data.error || 'Unknown error'));
+        toast.error('Failed to generate invite: ' + (data.error || 'Unknown error'));
       }
     } catch (err) {
       console.error(err);
-      alert('Error creating invite.');
+      toast.error('Error creating invite.');
     } finally {
       setInviting(false);
     }
@@ -74,7 +75,7 @@ function TeamSettings({ workspaceId }) {
 
   const copyToClipboard = () => {
     navigator.clipboard.writeText(inviteLink);
-    alert('Invite link copied to clipboard!');
+    toast.success('Invite link copied to clipboard!');
   };
 
   if (loading) return <div>Loading team data...</div>;

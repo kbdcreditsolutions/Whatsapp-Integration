@@ -71,7 +71,9 @@ app.use(cors());
 app.use(express.json());
 app.use('/api/whatsapp', whatsappRoutes);
 app.use('/api/meta', metaRoutes);
+const analyticsRoute = require('./analytics');
 app.use('/api/team', teamRoutes);
+app.get('/api/analytics', analyticsRoute);
 app.use('/api/stripe', stripeRoutes);
 
 // --- Configuration ---

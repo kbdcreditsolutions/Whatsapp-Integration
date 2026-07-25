@@ -9,11 +9,11 @@ module.exports = async (req, res) => {
 
   try {
     await client.connect();
-    const sqlPath = path.join(__dirname, '../migrations/07_billing.sql');
+    const sqlPath = path.join(__dirname, '../migrations/08_roles_permissions.sql');
     const sql = fs.readFileSync(sqlPath, 'utf8');
     await client.query(sql);
     await client.end();
-    res.status(200).send('Migration successful');
+    res.status(200).send('Migration 08_roles_permissions successful');
   } catch (error) {
     res.status(500).send('Migration failed: ' + error.message);
   }

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import toast from 'react-hot-toast';
 
 const CampaignDashboard = ({ workspaceId }) => {
   const [activeTab, setActiveTab] = useState('campaigns'); // 'campaigns' | 'templates'
@@ -50,10 +51,10 @@ const CampaignDashboard = ({ workspaceId }) => {
     setSyncing(true);
     try {
       const res = await axios.get(`${backendUrl}/api/meta/templates/sync?workspace_id=${workspaceId}`);
-      alert(`Successfully synced ${res.data.count} templates.`);
+      toast.success(`Successfully synced ${res.data.count} templates.`);
       fetchTemplates();
     } catch (error) {
-      alert(error.response?.data?.error || 'Failed to sync templates');
+      toast.error(error.response?.data?.error || 'Failed to sync templates');
     } finally {
       setSyncing(false);
     }
@@ -72,13 +73,13 @@ const CampaignDashboard = ({ workspaceId }) => {
         category: newTemplateCategory,
         components
       });
-      alert('Template submitted for approval!');
+      toast.success('Template submitted for approval!');
       setIsCreatingTemplate(false);
       setNewTemplateName('');
       setNewTemplateBody('');
       fetchTemplates();
     } catch (error) {
-      alert(error.response?.data?.error || 'Failed to create template');
+      toast.error(error.response?.data?.error || 'Failed to create template');
     } finally {
       setLoading(false);
     }
@@ -101,7 +102,7 @@ const CampaignDashboard = ({ workspaceId }) => {
       setSelectedTemplateId('');
       fetchCampaigns();
     } catch (error) {
-      alert(error.response?.data?.error || 'Failed to create campaign');
+      toast.error(error.response?.data?.error || 'Failed to create campaign');
     } finally {
       setLoading(false);
     }
@@ -114,10 +115,10 @@ const CampaignDashboard = ({ workspaceId }) => {
         workspace_id: workspaceId,
         variable_mapping: {} // No variables mapped in MVP UI
       });
-      alert('Campaign launched!');
+      toast.success('Campaign launched!');
       fetchCampaigns();
     } catch (error) {
-      alert(error.response?.data?.error || 'Failed to launch campaign');
+      toast.error(error.response?.data?.error || 'Failed to launch campaign');
     }
   };
 
