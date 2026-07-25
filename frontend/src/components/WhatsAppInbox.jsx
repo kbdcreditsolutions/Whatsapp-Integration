@@ -23,7 +23,9 @@ export default function WhatsAppInbox({ backendUrl, workspaceId, userId }) {
   const [internalNotes, setInternalNotes] = useState([]);
   const [isInternalNote, setIsInternalNote] = useState(false);
   const [showAttachMenu, setShowAttachMenu] = useState(false);
-
+  const [isContactModalOpen, setIsContactModalOpen] = useState(false);
+  const [editContactName, setEditContactName] = useState('');
+  const [editContactEmail, setEditContactEmail] = useState('');
   const fileInputRef = useRef(null);
   const messagesEndRef = useRef(null);
 
@@ -350,6 +352,35 @@ export default function WhatsAppInbox({ backendUrl, workspaceId, userId }) {
     }
   };
 
+  const handleSaveContact = async () => {
+    if (!activeNumber) return;
+    try {
+      const res = await fetch(`${backendUrl}/api/contacts/${activeNumber}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          workspace_id: workspaceId, 
+          name: editContactName,
+          email: editContactEmail
+        })
+      });
+      if (!res.ok) throw new Error('Failed to save contact');
+      
+      setContactsData(prev => ({
+        ...prev,
+        [activeNumber]: {
+          ...(prev[activeNumber] || {}),
+          name: editContactName,
+          email: editContactEmail
+        }
+      }));
+      setIsContactModalOpen(false);
+      toast.success('Contact saved successfully!');
+    } catch (error) {
+      toast.error(error.message);
+    }
+  };
+
   if (!supabase) {
     return (
       <div className="glass-card rounded-2xl p-8 text-center text-red-400 max-w-md mx-auto mt-20">
@@ -455,6 +486,17 @@ export default function WhatsAppInbox({ backendUrl, workspaceId, userId }) {
                 <div>
                   <div className="text-gray-900 text-lg flex items-center gap-2">
                     {getProfileName(activeNumber) || `+${activeNumber}`}
+                    <button 
+                      onClick={() => {
+                        setEditContactName(contactsData[activeNumber]?.name || '');
+                        setEditContactEmail(contactsData[activeNumber]?.email || '');
+                        setIsContactModalOpen(true);
+                      }}
+                      className="text-gray-400 hover:text-blue-500 p-1"
+                      title="Edit Contact"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
+                    </button>
                     {contactsData[activeNumber]?.tags?.map(t => (
                       <span key={t} className="text-[10px] px-2 py-0.5 bg-gray-100 border border-gray-200 text-gray-600 rounded-full font-medium">{t}</span>
                     ))}
@@ -816,6 +858,55 @@ export default function WhatsAppInbox({ backendUrl, workspaceId, userId }) {
           </div>
         )}
       </div>
+      
+      {isContactModalOpen && (
+        <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-md shadow-xl overflow-hidden border border-gray-100 animate-in fade-in zoom-in-95 duration-200">
+            <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+              <h3 className="font-semibold text-lg text-gray-900">Edit Contact</h3>
+              <button onClick={() => setIsContactModalOpen(false)} className="text-gray-400 hover:text-gray-600">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
+                <input 
+                  type="text" 
+                  value={editContactName}
+                  onChange={e => setEditContactName(e.target.value)}
+                  placeholder="Contact Name"
+                  className="w-full border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 px-4 py-2 border"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                <input 
+                  type="email" 
+                  value={editContactEmail}
+                  onChange={e => setEditContactEmail(e.target.value)}
+                  placeholder="contact@example.com"
+                  className="w-full border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 px-4 py-2 border"
+                />
+              </div>
+            </div>
+            <div className="px-6 py-4 bg-gray-50 flex justify-end gap-3 rounded-b-2xl">
+              <button 
+                onClick={() => setIsContactModalOpen(false)}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={handleSaveContact}
+                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-500 shadow-sm transition-colors"
+              >
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
