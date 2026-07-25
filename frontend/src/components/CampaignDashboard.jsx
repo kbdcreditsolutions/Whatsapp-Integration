@@ -194,7 +194,7 @@ const CampaignDashboard = ({ workspaceId }) => {
                         {c.status}
                       </span>
                     </td>
-                    <td className="p-4 text-sm text-gray-600">{c.audience_tags.length > 0 ? c.audience_tags.join(', ') : 'All Contacts'}</td>
+                    <td className="p-4 text-sm text-gray-600">{c.audience_tags?.length > 0 ? c.audience_tags.join(', ') : 'All Contacts'}</td>
                     <td className="p-4 text-sm text-gray-500">
                       <div>Sent: {c.analytics?.sent || 0}</div>
                       <div>Failed: {c.analytics?.failed || 0}</div>
