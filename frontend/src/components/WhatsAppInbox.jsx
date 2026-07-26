@@ -493,7 +493,7 @@ export default function WhatsAppInbox({ backendUrl, workspaceId, userId }) {
                         setIsContactModalOpen(true);
                       }}
                       className="text-gray-400 hover:text-blue-500 p-1"
-                      title="Edit Contact"
+                      title={contactsData[activeNumber]?.name ? "Edit Contact" : "Save Contact"}
                     >
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
                     </button>
@@ -863,7 +863,9 @@ export default function WhatsAppInbox({ backendUrl, workspaceId, userId }) {
         <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl w-full max-w-md shadow-xl overflow-hidden border border-gray-100 animate-in fade-in zoom-in-95 duration-200">
             <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
-              <h3 className="font-semibold text-lg text-gray-900">Edit Contact</h3>
+              <h3 className="font-semibold text-lg text-gray-900">
+                {contactsData[activeNumber]?.name ? "Edit Contact" : "Save Contact"}
+              </h3>
               <button onClick={() => setIsContactModalOpen(false)} className="text-gray-400 hover:text-gray-600">
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
               </button>
@@ -876,7 +878,7 @@ export default function WhatsAppInbox({ backendUrl, workspaceId, userId }) {
                   value={editContactName}
                   onChange={e => setEditContactName(e.target.value)}
                   placeholder="Contact Name"
-                  className="w-full border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 px-4 py-2 border"
+                  className="w-full border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 px-4 py-2 border text-gray-900 bg-white"
                 />
               </div>
               <div>
@@ -886,7 +888,7 @@ export default function WhatsAppInbox({ backendUrl, workspaceId, userId }) {
                   value={editContactEmail}
                   onChange={e => setEditContactEmail(e.target.value)}
                   placeholder="contact@example.com"
-                  className="w-full border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 px-4 py-2 border"
+                  className="w-full border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 px-4 py-2 border text-gray-900 bg-white"
                 />
               </div>
             </div>
