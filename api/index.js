@@ -6,10 +6,8 @@ const multer = require('multer');
 const FormData = require('form-data');
 const csv = require('csv-parser');
 const stream = require('stream');
-const metaRoutes = require('./meta');
 const stripeRoutes = require('./stripe');
 const teamRoutes = require('./team');
-const whatsappRoutes = require('./whatsapp');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -69,8 +67,6 @@ app.post('/api/stripe/webhook', express.raw({type: 'application/json'}), async (
 // Middleware
 app.use(cors());
 app.use(express.json());
-app.use('/api/whatsapp', whatsappRoutes);
-app.use('/api/meta', metaRoutes);
 const analyticsRoute = require('./analytics');
 app.use('/api/team', teamRoutes);
 app.get('/api/analytics', analyticsRoute);
@@ -323,8 +319,7 @@ app.get('/api/webhooks/whatsapp', (req, res) => {
  * Unified Webhook Receiver (POST)
  * Receives delivery statuses and inbound messages from both Interakt and Meta.
  */
-const multer = require('multer');
-const FormData = require('form-data');
+
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
@@ -1242,6 +1237,8 @@ app.delete('/api/automations/:id', async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
+app.post('/api/contacts/import', multer().single('file'), async (req, res) => {
   if (!supabase) return res.status(500).json({ error: 'Supabase not configured' });
   const { workspace_id } = req.body;
   const file = req.file;
