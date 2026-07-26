@@ -480,11 +480,19 @@ export default function WhatsAppInbox({ backendUrl, workspaceId, userId }) {
           <>
             <div className="p-4 font-semibold border-b border-gray-200 bg-white/90 backdrop-blur-md z-10 flex items-center justify-between">
               <div className="flex items-center gap-4">
-                <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center text-gray-500 border border-gray-200">
+                <button 
+                  onClick={() => {
+                    setEditContactName(contactsData[activeNumber]?.name || '');
+                    setEditContactEmail(contactsData[activeNumber]?.email || '');
+                    setIsContactModalOpen(true);
+                  }}
+                  className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center text-gray-500 border border-gray-200 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200 transition-all cursor-pointer shadow-sm active:scale-95"
+                  title={contactsData[activeNumber]?.name ? "Edit Contact" : "Save Contact"}
+                >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>
-                </div>
-                <div>
-                  <div className="text-gray-900 text-lg flex items-center gap-2">
+                </button>
+                <div className="flex flex-col">
+                  <div className="text-gray-900 text-lg font-medium flex items-center gap-2 leading-none">
                     {getProfileName(activeNumber) || `+${activeNumber}`}
                     <button 
                       onClick={() => {
@@ -501,6 +509,11 @@ export default function WhatsAppInbox({ backendUrl, workspaceId, userId }) {
                       <span key={t} className="text-[10px] px-2 py-0.5 bg-gray-100 border border-gray-200 text-gray-600 rounded-full font-medium">{t}</span>
                     ))}
                   </div>
+                  {getProfileName(activeNumber) && (
+                    <div className="text-sm text-gray-500 mt-1">
+                      +{activeNumber}
+                    </div>
+                  )}
                 </div>
               </div>
               <div className="flex items-center gap-3">
