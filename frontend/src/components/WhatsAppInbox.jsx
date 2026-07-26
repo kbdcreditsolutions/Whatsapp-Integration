@@ -700,6 +700,10 @@ export default function WhatsAppInbox({ backendUrl, workspaceId, userId }) {
                           </div>
                         ) : msg.type === 'document' ? (
                           docCaption && <p className="text-[15px] leading-relaxed whitespace-pre-wrap">{docCaption}</p>
+                        ) : msg.content === '[unsupported]' ? (
+                             <div className="flex items-center gap-2 text-yellow-600 bg-yellow-50 p-2 rounded-lg border border-yellow-200">
+                               <span className="font-medium text-sm">⚠️ Unsupported Message Type</span>
+                             </div>
                         ) : (
                           msg.content && <p className="text-[15px] leading-relaxed whitespace-pre-wrap">{msg.content}</p>
                         )}
