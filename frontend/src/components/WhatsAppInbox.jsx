@@ -59,10 +59,12 @@ export default function WhatsAppInbox({ backendUrl, workspaceId, userId }) {
         .from('contacts')
         .select('*')
         .eq('workspace_id', workspaceId);
-      if (!error && data) {
+      if (!error && Array.isArray(data)) {
         const contactMap = {};
         data.forEach(c => contactMap[c.phone_number] = c);
         setContactsData(contactMap);
+      } else {
+        console.error("Failed to load contacts or data is not array", error, data);
       }
     };
 
@@ -70,9 +72,15 @@ export default function WhatsAppInbox({ backendUrl, workspaceId, userId }) {
       try {
         const res = await fetch(`${backendUrl}/api/workspaces/team?workspace_id=${workspaceId}`);
         const data = await res.json();
-        setTeam(data);
+        if (Array.isArray(data)) {
+          setTeam(data);
+        } else {
+          console.error("Team API returned non-array:", data);
+          setTeam([]);
+        }
       } catch (e) {
         console.error("Failed to load team", e);
+        setTeam([]);
       }
     };
 
