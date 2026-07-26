@@ -18,22 +18,23 @@ async function sync() {
           workspace_id: msg.workspace_id,
         };
       }
-      if (msg.profile_name) {
+      if (msg.profile_name && msg.profile_name !== 'null') {
         contactsToUpsert[msg.phone_number].name = msg.profile_name;
       }
     }
   }
 
-  const payload = Object.values(contactsToUpsert);
-  console.log(`Found ${payload.length} unique contacts to sync.`);
-  
-  if (payload.length > 0) {
-    const { data, error: upsertError } = await supabase.from('contacts').upsert(payload, { onConflict: 'phone_number', ignoreDuplicates: true });
-    if (upsertError) {
-      console.error("Upsert error:", upsertError);
-    } else {
-      console.log("Successfully synced contacts.");
+  // Update existing contacts directly
+  for (const contact of Object.values(contactsToUpsert)) {
+    if (contact.name) {
+      const { error: updateError } = await supabase.from('contacts').update({ name: contact.name }).eq('phone_number', contact.phone_number);
+      if (updateError) {
+        console.error("Update error for", contact.phone_number, updateError);
+      } else {
+        console.log("Successfully updated contact", contact.phone_number, "with name", contact.name);
+      }
     }
   }
+  console.log("Sync complete");
 }
 sync();
