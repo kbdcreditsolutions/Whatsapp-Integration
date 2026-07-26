@@ -86,10 +86,13 @@ export default function ContactManager({ backendUrl, workspaceId }) {
 
   const filteredContacts = contacts.filter(c => {
     const term = searchQuery.toLowerCase();
-    const nameMatch = (c.name || '').toLowerCase().includes(term);
-    const phoneMatch = c.phone_number.includes(term);
-    const emailMatch = (c.email || '').toLowerCase().includes(term);
-    const tagMatch = (c.tags || []).some(t => t.toLowerCase().includes(term));
+    const nameMatch = String(c.name || '').toLowerCase().includes(term);
+    const phoneMatch = String(c.phone_number || '').toLowerCase().includes(term);
+    const emailMatch = String(c.email || '').toLowerCase().includes(term);
+    
+    const tagsArray = Array.isArray(c.tags) ? c.tags : (typeof c.tags === 'string' ? [c.tags] : []);
+    const tagMatch = tagsArray.some(t => String(t).toLowerCase().includes(term));
+    
     return nameMatch || phoneMatch || emailMatch || tagMatch;
   });
 
@@ -169,23 +172,25 @@ export default function ContactManager({ backendUrl, workspaceId }) {
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex flex-col gap-1 items-start">
                       <span className="px-2 py-0.5 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">
-                        {contact.category || 'Lead'}
+                        {String(contact.category || 'Lead')}
                       </span>
-                      {contact.tags && contact.tags.length > 0 && (
+                      {Array.isArray(contact.tags) && contact.tags.length > 0 && (
                         <div className="flex gap-1 flex-wrap mt-1">
                           {contact.tags.map(t => (
-                            <span key={t} className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded-md text-[10px] font-medium border border-gray-200">{t}</span>
+                            <span key={String(t)} className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded-md text-[10px] font-medium border border-gray-200">{String(t)}</span>
                           ))}
                         </div>
                       )}
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <span className="text-sm text-gray-900">{contact.assigned_to_profile?.full_name || 'Unassigned'}</span>
+                    <span className="text-sm text-gray-900">{contact.assigned_to_profile?.full_name ? String(contact.assigned_to_profile.full_name) : 'Unassigned'}</span>
                   </td>
                   <td className="px-6 py-4">
                     <div className="text-xs text-gray-500 max-w-xs overflow-hidden text-ellipsis whitespace-nowrap">
-                      {contact.custom_attributes ? Object.entries(contact.custom_attributes).map(([k, v]) => `${k}: ${v}`).join(', ') : '-'}
+                      {contact.custom_attributes && typeof contact.custom_attributes === 'object' 
+                        ? Object.entries(contact.custom_attributes).map(([k, v]) => `${k}: ${v}`).join(', ') 
+                        : '-'}
                     </div>
                   </td>
                   <td className="px-6 py-4 text-right whitespace-nowrap">
