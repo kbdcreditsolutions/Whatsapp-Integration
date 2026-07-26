@@ -46,3 +46,4 @@ CREATE TRIGGER on_workspace_created_usage
 INSERT INTO public.workspace_usage (workspace_id)
 SELECT id FROM public.workspaces
 ON CONFLICT (workspace_id) DO NOTHING;
+

@@ -477,6 +477,18 @@ app.post('/api/webhooks/whatsapp', async (req, res) => {
             }
 
             // ==========================================
+            // AUTO-SAVE CONTACT
+            // ==========================================
+            if (workspace_id) {
+              const contactPayload = { phone_number: message.from, workspace_id };
+              if (profileName) contactPayload.name = profileName;
+              await supabase.from('contacts').upsert(
+                contactPayload,
+                { onConflict: 'phone_number', ignoreDuplicates: true }
+              );
+            }
+
+            // ==========================================
             // AUTOMATION (AUTO-REPLY) LOGIC
             // ==========================================
             if (workspace_id && message.type === 'text') {
